@@ -11,8 +11,8 @@ import {
     ChartBarIcon,
     Cog6ToothIcon,
     BookOpenIcon,
-    ClipboardDocumentListIcon,
     DocumentTextIcon,
+    UserGroupIcon,
 } from "@heroicons/react/24/outline";
 
 interface SidebarProps {
@@ -27,8 +27,9 @@ const navigation = [
     { name: "Classes", href: "/classes", icon: AcademicCapIcon },
     { name: "Subjects", href: "/subjects", icon: BookOpenIcon },
     { name: "Results", href: "/results", icon: ChartBarIcon },
-    { name: "Report Card", href: "/parent/report-card", icon: DocumentTextIcon },
+    { name: "Report Card", href: "/teacher/report-card", icon: DocumentTextIcon },
     { name: "Fees", href: "/fees", icon: CurrencyDollarIcon },
+    { name: "Class Teacher", href: "/admin/class-teacher-assignment", icon: UserGroupIcon },
     { name: "Settings", href: "/settings", icon: Cog6ToothIcon },
 ];
 
@@ -69,7 +70,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
         
         // Teacher restrictions
         if (user?.role === "TEACHER" || user?.role === "CLASS_TEACHER") {
-            return ["Dashboard", "Students", "Results", "Report Card", "Classes", "Subjects"].includes(item.name);
+            return ["Dashboard", "Students", "Results", "Report Card", "Subjects"].includes(item.name);
         }
         
         // Bursar restrictions

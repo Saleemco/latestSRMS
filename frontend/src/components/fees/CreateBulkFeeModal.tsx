@@ -3,6 +3,7 @@ import { X, BookOpen, Calendar, DollarSign, CheckCircle, Loader2, Users } from '
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { classService } from '../../services/class.service';
 import { termService, Term } from '../../services/term.service';
+import { useTerm } from '../../context/TermContext';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 
@@ -21,6 +22,7 @@ interface ClassFee {
 }
 
 export const CreateBulkFeeModal = ({ isOpen, onClose, onSuccess }: CreateBulkFeeModalProps) => {
+  const { selectedTerm, selectedSession, terms: contextTerms, activeTerm } = useTerm();
   const [selectedTermId, setSelectedTermId] = useState('');
   const [classFees, setClassFees] = useState<ClassFee[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -32,15 +34,11 @@ export const CreateBulkFeeModal = ({ isOpen, onClose, onSuccess }: CreateBulkFee
     queryFn: classService.getAll,
   });
 
-  const { data: terms, isLoading: termsLoading } = useQuery({
-    queryKey: ['terms'],
-    queryFn: termService.getAll,
-  });
+  // Use terms from context instead of fetching again
+  const terms = contextTerms;
 
-  const { data: activeTerm } = useQuery({
-    queryKey: ['active-term'],
-    queryFn: termService.getActive,
-  });
+  // Get terms filtered by selected session
+  const filteredTerms = terms?.filter(term => term.sessionId === selectedSession?.id) || [];
 
   // Initialize class fees when classes load
   useEffect(() => {
@@ -56,12 +54,21 @@ export const CreateBulkFeeModal = ({ isOpen, onClose, onSuccess }: CreateBulkFee
     }
   }, [classes]);
 
-  // Set active term as default
+  // Set term ID when modal opens - USE SELECTED TERM FROM FILTER, NOT ACTIVE TERM
   useEffect(() => {
-    if (activeTerm && !selectedTermId && isOpen) {
-      setSelectedTermId(activeTerm.id);
+    if (isOpen) {
+      // IMPORTANT: Use the currently selected term from the filter
+      const defaultTermId = selectedTerm?.id || '';
+      console.log('📦 Bulk Create - Setting term:', {
+        selectedTermId: defaultTermId,
+        selectedTermName: selectedTerm?.name,
+        selectedSessionName: selectedSession?.name,
+        activeTermId: activeTerm?.id,
+        activeTermName: activeTerm?.name
+      });
+      setSelectedTermId(defaultTermId);
     }
-  }, [activeTerm, isOpen]);
+  }, [isOpen, selectedTerm, selectedSession, activeTerm]);
 
   const handleClassToggle = (index: number) => {
     const updated = [...classFees];
@@ -104,12 +111,21 @@ export const CreateBulkFeeModal = ({ isOpen, onClose, onSuccess }: CreateBulkFee
     setIsSubmitting(true);
     
     try {
+      console.log('📦 Bulk Creating Fees:', {
+        termId: selectedTermId,
+        termName: filteredTerms.find(t => t.id === selectedTermId)?.name,
+        sessionName: selectedSession?.name,
+        classes: selectedClasses.map(c => ({ className: c.className, amount: c.amount, students: c.studentCount }))
+      });
+      
       // Create fees for each selected class
       const results = await Promise.all(
         selectedClasses.map(async (classFee) => {
           // Get all students in this class
           const studentsResponse = await api.get(`/students?classId=${classFee.classId}`);
           const students = studentsResponse.data || [];
+          
+          console.log(`📚 Creating fees for ${classFee.className}: ${students.length} students, Amount: ₦${classFee.amount}`);
           
           const feePromises = students.map((student: any) => 
             api.post('/fees', {
@@ -143,7 +159,7 @@ export const CreateBulkFeeModal = ({ isOpen, onClose, onSuccess }: CreateBulkFee
     }
   };
 
-  const selectedTerm = terms?.find(t => t.id === selectedTermId);
+  const selectedTermData = filteredTerms.find(t => t.id === selectedTermId);
   const totalSelectedClasses = classFees.filter(cf => cf.selected && cf.amount > 0).length;
   const totalAmount = classFees.reduce((sum, cf) => sum + (cf.selected ? cf.amount : 0), 0);
   const estimatedTotalFees = classFees.reduce((sum, cf) => sum + (cf.selected ? cf.amount * cf.studentCount : 0), 0);
@@ -164,28 +180,40 @@ export const CreateBulkFeeModal = ({ isOpen, onClose, onSuccess }: CreateBulkFee
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Term Selection */}
+          {/* Term Selection - Show Current Selection */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Select Term <span className="text-red-500">*</span>
+              Selected Term <span className="text-red-500">*</span>
             </label>
-            <select
-              value={selectedTermId}
-              onChange={(e) => setSelectedTermId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              disabled={isSubmitting || termsLoading}
-              required
-            >
-              <option value="">Select a term</option>
-              {terms?.map((term: Term) => (
-                <option key={term.id} value={term.id}>
-                  {term.name} - {term.academicYear} {term.isActive ? '(Active)' : ''}
-                </option>
-              ))}
-            </select>
-            {selectedTerm && (
-              <p className="text-xs text-blue-600 mt-2">
-                Dates: {new Date(selectedTerm.startDate).toLocaleDateString()} - {new Date(selectedTerm.endDate).toLocaleDateString()}
+            <div className="flex items-center gap-3">
+              <Calendar className="w-5 h-5 text-blue-600" />
+              <div>
+                <p className="font-medium text-gray-900">
+                  {selectedTermData?.name || selectedTerm?.name || 'No term selected'}
+                </p>
+                <p className="text-xs text-gray-500">
+                  Session: {selectedTermData?.session?.name || selectedSession?.name || 'No session selected'}
+                </p>
+                {selectedTermData?.startDate && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Dates: {new Date(selectedTermData.startDate).toLocaleDateString()} - {new Date(selectedTermData.endDate).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
+            </div>
+            <p className="text-xs text-blue-600 mt-2">
+              Fees will be created for the term currently selected in your filter
+            </p>
+          </div>
+
+          {/* Current Filter Info */}
+          <div className="bg-gray-50 rounded-lg p-3">
+            <p className="text-xs text-gray-500">
+              <strong>Current Filter:</strong> Session: {selectedSession?.name || 'None'} | Term: {selectedTerm?.name || 'None'}
+            </p>
+            {selectedTerm?.id !== selectedTermId && selectedTermId && (
+              <p className="text-xs text-yellow-600 mt-1">
+                ⚠️ Note: Creating fees for {filteredTerms.find(t => t.id === selectedTermId)?.name} ({selectedTermData?.session?.name})
               </p>
             )}
           </div>
@@ -246,7 +274,7 @@ export const CreateBulkFeeModal = ({ isOpen, onClose, onSuccess }: CreateBulkFee
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Students</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fee Amount (₦)</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total for Class</th>
-                  </tr>
+                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {classesLoading ? (
@@ -310,6 +338,9 @@ export const CreateBulkFeeModal = ({ isOpen, onClose, onSuccess }: CreateBulkFee
                   <p className="text-xs text-gray-500 mt-1">
                     {totalSelectedClasses} class{totalSelectedClasses !== 1 ? 'es' : ''} selected
                   </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    Term: {selectedTermData?.name || selectedTerm?.name}
+                  </p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-gray-600">Total Amount to Collect</p>
@@ -334,7 +365,7 @@ export const CreateBulkFeeModal = ({ isOpen, onClose, onSuccess }: CreateBulkFee
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || totalSelectedClasses === 0}
+              disabled={isSubmitting || totalSelectedClasses === 0 || !selectedTermId}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isSubmitting ? (

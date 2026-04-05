@@ -15,10 +15,12 @@ import Fees from "./pages/Fees";
 import ParentFees from "./pages/ParentFees";
 import TermManagement from "./components/admin/terms/TermManagement";
 import SessionManagement from "./components/admin/SessionManagement";
+import ClassTeacherAssignment from "./components/admin/ClassTeacherAssignment";
 import NotFound from "./pages/NotFound";
 import TeacherResults from "./pages/TeacherResults";
 import ReportCard from "./pages/ReportCard";
 import ParentReportCard from "./pages/ParentReportCard";
+import { ClassTeacherDashboard } from "./components/dashboards/ClassTeacherDashboard"; // ADD THIS IMPORT
 
 const queryClient = new QueryClient();
 
@@ -38,6 +40,14 @@ function App() {
               }>
                 <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="dashboard" element={<Dashboard />} />
+                
+                {/* ADD THIS NEW ROUTE - Class Teacher Dashboard */}
+                <Route path="dashboard/class-teacher" element={
+                  <ProtectedRoute allowedRoles={['TEACHER', 'CLASS_TEACHER', 'ADMIN', 'PRINCIPAL']}>
+                    <ClassTeacherDashboard />
+                  </ProtectedRoute>
+                } />
+                
                 <Route path="students" element={<Students />} />
                 <Route path="teachers" element={<Teachers />} />
                 <Route path="classes" element={<Classes />} />
@@ -72,6 +82,11 @@ function App() {
                 <Route path="admin/sessions" element={
                   <ProtectedRoute allowedRoles={['ADMIN', 'PRINCIPAL']}>
                     <SessionManagement />
+                  </ProtectedRoute>
+                } />
+                <Route path="admin/class-teacher-assignment" element={
+                  <ProtectedRoute allowedRoles={['ADMIN', 'PRINCIPAL']}>
+                    <ClassTeacherAssignment />
                   </ProtectedRoute>
                 } />
               </Route>

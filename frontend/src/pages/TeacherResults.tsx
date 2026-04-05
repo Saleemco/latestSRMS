@@ -70,20 +70,18 @@ export const TeacherResults = () => {
   });
 
   const teacher = teacherData?.teacher;
-  const teacherId = teacher?.id; // This gets the actual teacher ID from the Teacher table
+  const teacherId = teacher?.id;
 
   // Fetch all grades for teacher's subjects
   const { data: gradesData, isLoading, error, refetch } = useQuery({
     queryKey: ["teacher-grades", teacherId, selectedTerm?.id, selectedSession?.id],
     queryFn: async () => {
       if (!teacherId) return { data: [] };
-      console.log("Fetching grades for teacher ID:", teacherId);
       const response = await dashboardService.getGradesByTeacher(
         teacherId,
         selectedTerm?.id,
         selectedSession?.id
       );
-      console.log("Grades response:", response);
       return response;
     },
     enabled: !!teacherId,
@@ -123,11 +121,11 @@ export const TeacherResults = () => {
     return Array.from(subjects.entries()).map(([id, name]) => ({ id, name }));
   }, [grades]);
 
-  // Filter and group grades
+  // Filter and group grades - FIXED: direct filtering instead of useSearch
   const filteredResults = useMemo(() => {
     let filtered = grades;
 
-    // Filter by search term
+    // Filter by search term - THIS IS THE SEARCH FUNCTIONALITY
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(
@@ -521,7 +519,7 @@ export const TeacherResults = () => {
               </div>
             </div>
 
-            {/* Search */}
+            {/* Search - This is the search bar */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Search

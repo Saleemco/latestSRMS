@@ -1,55 +1,38 @@
-﻿import { useState, useEffect } from "react";
-import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
+﻿// src/components/ui/SearchBar.tsx
+import { useState, useEffect } from 'react';
+import { Search } from 'lucide-react';
 
 interface SearchBarProps {
-  onSearch: (searchTerm: string) => void;
+  onSearch: (term: string) => void;
   placeholder?: string;
-  className?: string;
-  debounceMs?: number;
+  value?: string;
 }
 
-export const SearchBar = ({ 
-  onSearch, 
-  placeholder = "Search...", 
-  className = "",
-  debounceMs = 300
-}: SearchBarProps) => {
-  const [searchTerm, setSearchTerm] = useState("");
+export const SearchBar = ({ onSearch, placeholder = "Search...", value = "" }: SearchBarProps) => {
+  const [searchTerm, setSearchTerm] = useState(value);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+    const debounceTimer = setTimeout(() => {
       onSearch(searchTerm);
-    }, debounceMs);
+    }, 300);
 
-    return () => clearTimeout(timer);
-  }, [searchTerm, onSearch, debounceMs]);
+    return () => clearTimeout(debounceTimer);
+  }, [searchTerm, onSearch]);
 
-  const clearSearch = () => {
-    setSearchTerm("");
-    onSearch("");
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
   };
 
   return (
-    <div className={className}>
-      <div className="relative">
-        <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-        <input
-          type="text"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder={placeholder}
-          className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-        />
-        {searchTerm && (
-          <button
-            type="button"
-            onClick={clearSearch}
-            className="absolute right-3 top-1/2 transform -translate-y-1/2"
-          >
-            <XMarkIcon className="h-5 w-5 text-gray-400 hover:text-gray-600" />
-          </button>
-        )}
-      </div>
+    <div className="relative">
+      <input
+        type="text"
+        value={searchTerm}
+        onChange={handleChange}
+        placeholder={placeholder}
+        className="w-full px-4 py-2 pl-10 pr-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+      />
+      <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
     </div>
   );
 };

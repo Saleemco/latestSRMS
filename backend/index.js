@@ -325,12 +325,18 @@ app.get('/api/users/role/:role', async (req, res) => {
 });
 
 // ==================== CLASS ENDPOINTS ====================
+// ==================== CLASS ENDPOINTS ====================
 app.get('/api/classes', async (req, res) => {
   try {
     console.log('📚 GET /api/classes - Fetching all classes');
     const classes = await prisma.class.findMany({
       include: {
         teacher: {
+          include: {
+            user: true
+          }
+        },
+        classTeacher: {
           include: {
             user: true
           }
@@ -345,39 +351,40 @@ app.get('/api/classes', async (req, res) => {
         }
       }
     });
-    console.log(`✅ Found ${classes.length} classes`);
-    res.json(classes);
+    
+    // Transform the data to include class teacher information
+    const transformedClasses = classes.map(cls => ({
+      id: cls.id,
+      name: cls.name,
+      grade: cls.grade,
+      teacherId: cls.teacherId,
+      teacher: cls.teacher ? {
+        id: cls.teacher.id,
+        name: cls.teacher.user?.name,
+        email: cls.teacher.user?.email
+      } : null,
+      classTeacherId: cls.classTeacherId,
+      classTeacher: cls.classTeacher ? {
+        id: cls.classTeacher.id,
+        firstName: cls.classTeacher.user?.name?.split(' ')[0] || '',
+        lastName: cls.classTeacher.user?.name?.split(' ').slice(1).join(' ') || '',
+        name: cls.classTeacher.user?.name,
+        email: cls.classTeacher.user?.email
+      } : null,
+      _count: cls._count,
+      createdAt: cls.createdAt,
+      updatedAt: cls.updatedAt
+    }));
+    
+    console.log(`✅ Found ${transformedClasses.length} classes`);
+    console.log('📊 Classes with class teachers:', transformedClasses.filter(c => c.classTeacher).length);
+    
+    res.json(transformedClasses);
   } catch (error) {
     console.error('❌ Error fetching classes:', error);
     res.status(500).json({ error: error.message });
   }
 });
-
-app.get('/api/classes/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const classData = await prisma.class.findUnique({
-      where: { id },
-      include: {
-        teacher: {
-          include: {
-            user: true
-          }
-        },
-        students: {
-          include: {
-            user: true
-          }
-        },
-        subjects: true
-      }
-    });
-    res.json(classData);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 app.post('/api/classes', async (req, res) => {
   try {
     const { name, section, classTeacherId } = req.body;
@@ -514,6 +521,8 @@ app.delete('/api/classes/:id', async (req, res) => {
 });
 
 // ==================== TEACHER ENDPOINTS ====================
+
+// 1. Get all teachers
 app.get('/api/teachers', async (req, res) => {
   try {
     console.log('📚 Fetching teachers from API...');
@@ -583,37 +592,57 @@ app.get('/api/teachers', async (req, res) => {
   }
 });
 
-// Get teacher by user ID
-app.get('/api/teachers/user/:userId', async (req, res) => {
+// 2. Get available teachers for class teacher assignment (SPECIFIC ROUTE - MUST COME BEFORE /:id)
+app.get('/api/teachers/available', async (req, res) => {
   try {
-    const { userId } = req.params;
-    console.log('👤 Fetching teacher by user ID:', userId);
+    console.log('🔍 Fetching available teachers for class teacher assignment...');
     
-    const teacher = await prisma.teacher.findUnique({
-      where: { userId: userId },
+    const teachers = await prisma.teacher.findMany({
       include: {
-        user: true,
-        classes: true,
-        subjects: true
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        },
+        classTaught: true
       }
     });
     
-    if (!teacher) {
-      console.log('❌ No teacher found for user ID:', userId);
-      return res.status(404).json({ error: 'Teacher not found' });
-    }
+    console.log(`✅ Found ${teachers.length} teachers in database`);
     
-    console.log('✅ Teacher found:', teacher.user?.name);
-    res.json(teacher);
+    const formattedTeachers = teachers.map(teacher => {
+      const fullName = teacher.user?.name || 'Unknown Teacher';
+      const email = teacher.user?.email || 'No email';
+      
+      return {
+        id: teacher.id,
+        name: fullName,
+        email: email,
+        currentClass: teacher.classTaught?.name || null
+      };
+    });
+    
+    console.log('📊 Available teachers:', formattedTeachers);
+    
+    res.json({ data: formattedTeachers });
   } catch (error) {
-    console.error('Error fetching teacher by user ID:', error);
+    console.error('❌ Error fetching available teachers:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
+// 3. Get teacher by ID (PARAMETER ROUTE - COMES AFTER SPECIFIC ROUTES)
 app.get('/api/teachers/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    
+    // Skip if this is the 'available' route (already handled above)
+    if (id === 'available') {
+      return res.status(404).json({ error: 'Teacher not found' });
+    }
+    
     console.log(`📚 Fetching teacher with ID: ${id}`);
     
     const teacher = await prisma.teacher.findUnique({
@@ -673,6 +702,35 @@ app.get('/api/teachers/:id', async (req, res) => {
   }
 });
 
+// 4. Get teacher by user ID
+app.get('/api/teachers/user/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    console.log('👤 Fetching teacher by user ID:', userId);
+    
+    const teacher = await prisma.teacher.findUnique({
+      where: { userId: userId },
+      include: {
+        user: true,
+        classes: true,
+        subjects: true
+      }
+    });
+    
+    if (!teacher) {
+      console.log('❌ No teacher found for user ID:', userId);
+      return res.status(404).json({ error: 'Teacher not found' });
+    }
+    
+    console.log('✅ Teacher found:', teacher.user?.name);
+    res.json(teacher);
+  } catch (error) {
+    console.error('Error fetching teacher by user ID:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 5. Create teacher
 app.post('/api/teachers', async (req, res) => {
   try {
     const { email, classIds, subjectIds } = req.body;
@@ -752,6 +810,7 @@ app.post('/api/teachers', async (req, res) => {
   }
 });
 
+// 6. Delete teacher
 app.delete('/api/teachers/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -806,6 +865,398 @@ app.delete('/api/teachers/:id', async (req, res) => {
       error: 'Failed to delete teacher',
       message: error.message 
     });
+  }
+});
+
+// ==================== CLASS TEACHER ENDPOINTS ====================
+
+// Assign class teacher
+// ==================== CLASS ENDPOINTS ====================
+app.get('/api/classes', async (req, res) => {
+  try {
+    console.log('📚 GET /api/classes - Fetching all classes');
+    const classes = await prisma.class.findMany({
+      include: {
+        teacher: {
+          include: {
+            user: true
+          }
+        },
+        classTeacher: {
+          include: {
+            user: true
+          }
+        },
+        students: {
+          include: {
+            user: true
+          }
+        },
+        _count: {
+          select: { students: true }
+        }
+      }
+    });
+    
+    // Transform the data to include class teacher information
+    const transformedClasses = classes.map(cls => ({
+      id: cls.id,
+      name: cls.name,
+      grade: cls.grade,
+      teacherId: cls.teacherId,
+      teacher: cls.teacher ? {
+        id: cls.teacher.id,
+        name: cls.teacher.user?.name,
+        email: cls.teacher.user?.email
+      } : null,
+      classTeacherId: cls.classTeacherId,
+      classTeacher: cls.classTeacher ? {
+        id: cls.classTeacher.id,
+        firstName: cls.classTeacher.user?.name?.split(' ')[0] || '',
+        lastName: cls.classTeacher.user?.name?.split(' ').slice(1).join(' ') || '',
+        name: cls.classTeacher.user?.name,
+        email: cls.classTeacher.user?.email
+      } : null,
+      _count: cls._count,
+      createdAt: cls.createdAt,
+      updatedAt: cls.updatedAt
+    }));
+    
+    console.log(`✅ Found ${transformedClasses.length} classes`);
+    console.log('📊 Classes with class teachers:', transformedClasses.filter(c => c.classTeacher).length);
+    
+    res.json(transformedClasses);
+  } catch (error) {
+    console.error('❌ Error fetching classes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get class teacher dashboard
+app.get('/api/dashboard/class-teacher', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let userId = null;
+    
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
+    }
+    
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const teacher = await prisma.teacher.findFirst({
+      where: { userId },
+      include: {
+        user: true,
+        classTaught: {
+          include: {
+            students: {
+              include: {
+                user: true,
+                attendances: {
+                  orderBy: { date: 'desc' },
+                  take: 30
+                },
+                grades: {
+                  include: { subject: true },
+                  take: 50,
+                  orderBy: { createdAt: 'desc' }
+                }
+              }
+            },
+            subjects: {
+              include: {
+                subject: true
+              }
+            }
+          }
+        },
+        subjects: {
+          include: {
+            classes: {
+              include: {
+                class: true
+              }
+            }
+          }
+        }
+      }
+    });
+    
+    if (!teacher) {
+      return res.status(404).json({ error: 'Teacher not found' });
+    }
+    
+    const classData = teacher.classTaught;
+    
+    // Calculate class statistics
+    let totalStudents = 0;
+    let attendanceRate = 0;
+    let averageGrade = 0;
+    let todayAttendance = { present: 0, absent: 0, late: 0, total: 0 };
+    
+    if (classData) {
+      totalStudents = classData.students.length;
+      
+      // Calculate attendance rate for last 30 days
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const recentAttendances = classData.students.flatMap(s => 
+        s.attendances.filter(a => new Date(a.date) >= thirtyDaysAgo)
+      );
+      
+      const presentCount = recentAttendances.filter(a => a.status === 'PRESENT').length;
+      attendanceRate = recentAttendances.length > 0 
+        ? (presentCount / recentAttendances.length) * 100 
+        : 0;
+      
+      // Calculate average grade
+      const allGrades = classData.students.flatMap(s => s.grades);
+      const totalScore = allGrades.reduce((sum, g) => sum + g.score, 0);
+      averageGrade = allGrades.length > 0 ? totalScore / allGrades.length : 0;
+      
+      // Today's attendance
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const todayAttendances = await prisma.attendance.findMany({
+        where: {
+          classId: classData.id,
+          date: today
+        }
+      });
+      
+      todayAttendance = {
+        present: todayAttendances.filter(a => a.status === 'PRESENT').length,
+        absent: todayAttendances.filter(a => a.status === 'ABSENT').length,
+        late: todayAttendances.filter(a => a.status === 'LATE').length,
+        total: totalStudents
+      };
+    }
+    
+    // Get subjects teacher teaches (as regular teacher)
+    const teachingSubjects = teacher.subjects.map(sub => ({
+      id: sub.id,
+      name: sub.name,
+      classes: sub.classes.map(sc => sc.class?.name).filter(Boolean)
+    }));
+    
+    res.json({
+      data: {
+        teacher: {
+          id: teacher.id,
+          name: teacher.user?.name,
+          email: teacher.user?.email,
+          role: 'CLASS_TEACHER'
+        },
+        class: classData ? {
+          id: classData.id,
+          name: classData.name,
+          totalStudents,
+          subjects: classData.subjects.map(s => s.subject.name),
+          attendanceRate: attendanceRate.toFixed(1),
+          averageGrade: averageGrade.toFixed(1),
+          todayAttendance
+        } : null,
+        teachingSubjects,
+        recentActivities: {
+          recentAttendances: classData?.students.flatMap(s => 
+            s.attendances.slice(0, 5).map(a => ({
+              studentName: s.user?.name,
+              date: a.date,
+              status: a.status
+            }))
+          ).slice(0, 10),
+          recentGrades: classData?.students.flatMap(s =>
+            s.grades.slice(0, 5).map(g => ({
+              studentName: s.user?.name,
+              subject: g.subject?.name,
+              score: g.score,
+              type: g.type
+            }))
+          ).slice(0, 10)
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching class teacher dashboard:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get students in class teacher's class
+app.get('/api/class-teacher/students', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let userId = null;
+    
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
+    }
+    
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const teacher = await prisma.teacher.findFirst({
+      where: { userId },
+      include: {
+        classTaught: {
+          include: {
+            students: {
+              include: {
+                user: true
+              },
+              orderBy: {
+                user: {
+                  name: 'asc'
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+    
+    if (!teacher || !teacher.classTaught) {
+      return res.status(404).json({ error: 'No class assigned' });
+    }
+    
+    const students = teacher.classTaught.students.map(student => ({
+      id: student.id,
+      name: student.user?.name,
+      admissionNo: student.admissionNo,
+      gender: student.gender
+    }));
+    
+    res.json({ data: students });
+  } catch (error) {
+    console.error('Error fetching class teacher students:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get class teacher's attendance summary
+app.get('/api/class-teacher/attendance-summary', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let userId = null;
+    
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
+    }
+    
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const teacher = await prisma.teacher.findFirst({
+      where: { userId },
+      include: {
+        classTaught: {
+          include: {
+            students: {
+              include: {
+                attendances: true
+              }
+            }
+          }
+        }
+      }
+    });
+    
+    if (!teacher || !teacher.classTaught) {
+      return res.status(404).json({ error: 'No class assigned' });
+    }
+    
+    const classData = teacher.classTaught;
+    const students = classData.students;
+    
+    // Calculate attendance statistics
+    const totalStudents = students.length;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const todayAttendances = await prisma.attendance.findMany({
+      where: {
+        classId: classData.id,
+        date: today
+      }
+    });
+    
+    const presentToday = todayAttendances.filter(a => a.status === 'PRESENT').length;
+    const absentToday = todayAttendances.filter(a => a.status === 'ABSENT').length;
+    const lateToday = todayAttendances.filter(a => a.status === 'LATE').length;
+    
+    // Weekly summary
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - today.getDay());
+    
+    const weekAttendances = await prisma.attendance.findMany({
+      where: {
+        classId: classData.id,
+        date: {
+          gte: weekStart,
+          lte: today
+        }
+      }
+    });
+    
+    const weekPresent = weekAttendances.filter(a => a.status === 'PRESENT').length;
+    const weekTotal = weekAttendances.length;
+    const weekRate = weekTotal > 0 ? (weekPresent / weekTotal) * 100 : 0;
+    
+    // Monthly summary
+    const monthStart = new Date(today);
+    monthStart.setDate(1);
+    
+    const monthAttendances = await prisma.attendance.findMany({
+      where: {
+        classId: classData.id,
+        date: {
+          gte: monthStart,
+          lte: today
+        }
+      }
+    });
+    
+    const monthPresent = monthAttendances.filter(a => a.status === 'PRESENT').length;
+    const monthTotal = monthAttendances.length;
+    const monthRate = monthTotal > 0 ? (monthPresent / monthTotal) * 100 : 0;
+    
+    res.json({
+      data: {
+        totalStudents,
+        today: {
+          present: presentToday,
+          absent: absentToday,
+          late: lateToday,
+          rate: totalStudents > 0 ? (presentToday / totalStudents) * 100 : 0
+        },
+        weekly: {
+          present: weekPresent,
+          total: weekTotal,
+          rate: weekRate.toFixed(1)
+        },
+        monthly: {
+          present: monthPresent,
+          total: monthTotal,
+          rate: monthRate.toFixed(1)
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching attendance summary:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -3064,6 +3515,110 @@ app.get('/api/fees/parent', async (req, res) => {
   }
 });
 
+// ==================== BULK DELETE FEES ENDPOINT (PLACED BEFORE /:id ROUTES) ====================
+app.post('/api/fees/bulk-delete', async (req, res) => {
+  try {
+    const { feeIds } = req.body;
+    
+    if (!feeIds || !Array.isArray(feeIds) || feeIds.length === 0) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'No fee IDs provided',
+        message: 'Please provide an array of fee IDs to delete'
+      });
+    }
+    
+    console.log(`🗑️ Bulk deleting ${feeIds.length} fees...`);
+    console.log('Fee IDs to delete:', feeIds);
+    
+    // First, check if all fees exist and get their details
+    const existingFees = await prisma.fee.findMany({
+      where: { id: { in: feeIds } },
+      include: {
+        student: {
+          include: {
+            user: true
+          }
+        },
+        payments: true,
+        feeItems: true,
+        discounts: true
+      }
+    });
+    
+    const existingFeeIds = existingFees.map(f => f.id);
+    const missingFeeIds = feeIds.filter(id => !existingFeeIds.includes(id));
+    
+    if (missingFeeIds.length > 0) {
+      console.log('⚠️ Some fees not found:', missingFeeIds);
+    }
+    
+    if (existingFeeIds.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'No fees found',
+        message: 'None of the provided fee IDs exist'
+      });
+    }
+    
+    // Delete all related records first (payments, feeItems, discounts) then delete fees
+    // Using Promise.all for parallel execution since we're not in a transaction that needs rollback
+    const results = await Promise.all([
+      // Delete payments for all fees
+      prisma.payment.deleteMany({
+        where: { feeId: { in: existingFeeIds } }
+      }),
+      // Delete fee items for all fees
+      prisma.feeItem.deleteMany({
+        where: { feeId: { in: existingFeeIds } }
+      }),
+      // Delete discounts for all fees
+      prisma.discount.deleteMany({
+        where: { feeId: { in: existingFeeIds } }
+      })
+    ]);
+    
+    const paymentsDeleted = results[0].count;
+    const feeItemsDeleted = results[1].count;
+    const discountsDeleted = results[2].count;
+    
+    console.log(`  🗑️ Deleted ${paymentsDeleted} payments`);
+    console.log(`  🗑️ Deleted ${feeItemsDeleted} fee items`);
+    console.log(`  🗑️ Deleted ${discountsDeleted} discounts`);
+    
+    // Finally delete the fees themselves
+    const deletedFees = await prisma.fee.deleteMany({
+      where: { id: { in: existingFeeIds } }
+    });
+    
+    console.log(`  🗑️ Deleted ${deletedFees.count} fees`);
+    console.log(`✅ Successfully bulk deleted ${deletedFees.count} fees`);
+    
+    res.json({ 
+      success: true,
+      message: `${deletedFees.count} fee record(s) deleted successfully`,
+      count: deletedFees.count,
+      details: {
+        fees: deletedFees.count,
+        payments: paymentsDeleted,
+        feeItems: feeItemsDeleted,
+        discounts: discountsDeleted,
+        missingIds: missingFeeIds
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error bulk deleting fees:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to delete fee records',
+      message: error.message
+    });
+  }
+});
+
+// ==================== FEE ROUTES WITH PARAMETERS (AFTER SPECIFIC ROUTES) ====================
+
 app.get('/api/fees/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -3593,27 +4148,61 @@ app.delete('/api/fees/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
-    await prisma.$transaction([
-      prisma.payment.deleteMany({
-        where: { feeId: id }
-      }),
-      prisma.feeItem.deleteMany({
-        where: { feeId: id }
-      }),
-      prisma.discount.deleteMany({
-        where: { feeId: id }
-      }),
-      prisma.fee.delete({
-        where: { id }
-      })
-    ]);
+    console.log('🗑️ Deleting fee:', id);
+    
+    // Check if fee exists
+    const fee = await prisma.fee.findUnique({
+      where: { id },
+      include: {
+        payments: true,
+        feeItems: true,
+        discounts: true
+      }
+    });
+    
+    if (!fee) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'Fee not found' 
+      });
+    }
+    
+    // Delete related records first
+    if (fee.payments.length > 0) {
+      await prisma.payment.deleteMany({ where: { feeId: id } });
+      console.log(`  ✅ Deleted ${fee.payments.length} payments`);
+    }
+    
+    if (fee.feeItems.length > 0) {
+      await prisma.feeItem.deleteMany({ where: { feeId: id } });
+      console.log(`  ✅ Deleted ${fee.feeItems.length} fee items`);
+    }
+    
+    if (fee.discounts.length > 0) {
+      await prisma.discount.deleteMany({ where: { feeId: id } });
+      console.log(`  ✅ Deleted ${fee.discounts.length} discounts`);
+    }
+    
+    // Delete the fee
+    await prisma.fee.delete({
+      where: { id }
+    });
+    
+    console.log('✅ Fee deleted successfully');
     
     res.json({ 
-      data: { message: 'Fee deleted successfully' } 
+      success: true,
+      message: 'Fee record deleted successfully',
+      data: { id }
     });
+    
   } catch (error) {
-    console.error('Error deleting fee:', error);
-    res.status(500).json({ error: error.message });
+    console.error('❌ Error deleting fee:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to delete fee',
+      details: error.message 
+    });
   }
 });
 
@@ -4480,10 +5069,17 @@ const server = app.listen(port, () => {
   console.log(`     DELETE /api/classes/:id`);
   console.log(`   👨‍🏫 TEACHERS`);
   console.log(`     GET    /api/teachers`);
+  console.log(`     GET    /api/teachers/available (SPECIFIC ROUTE)`);
   console.log(`     GET    /api/teachers/:id`);
+  console.log(`     GET    /api/teachers/user/:userId`);
   console.log(`     POST   /api/teachers`);
   console.log(`     PUT    /api/teachers/:id`);
   console.log(`     DELETE /api/teachers/:id`);
+  console.log(`   👨‍🏫 CLASS TEACHER`);
+  console.log(`     PUT    /api/classes/:classId/assign-teacher`);
+  console.log(`     GET    /api/dashboard/class-teacher`);
+  console.log(`     GET    /api/class-teacher/students`);
+  console.log(`     GET    /api/class-teacher/attendance-summary`);
   console.log(`   🎓 STUDENTS`);
   console.log(`     GET    /api/students`);
   console.log(`     GET    /api/students/:id`);
@@ -4539,6 +5135,7 @@ const server = app.listen(port, () => {
   console.log(`     GET    /api/fees (with term filter)`);
   console.log(`     GET    /api/fees/summary (with term/session filter)`);
   console.log(`     GET    /api/fees/parent`);
+  console.log(`     POST   /api/fees/bulk-delete (BULK DELETE - placed before /:id)`);
   console.log(`     GET    /api/fees/:id`);
   console.log(`     GET    /api/fees/student/:studentId`);
   console.log(`     POST   /api/fees`);
@@ -4552,6 +5149,7 @@ const server = app.listen(port, () => {
   console.log(`     GET    /api/dashboard/admin`);
   console.log(`     GET    /api/dashboard/bursar`);
   console.log(`     GET    /api/dashboard/teacher (FIXED - subjects only show for teacher's assigned classes)`);
+  console.log(`     GET    /api/dashboard/class-teacher (NEW - Class teacher dashboard)`);
   console.log(`     GET    /api/dashboard/parent`);
   console.log(`     GET    /api/dashboard/student`);
   console.log(`   ❤️ HEALTH`);

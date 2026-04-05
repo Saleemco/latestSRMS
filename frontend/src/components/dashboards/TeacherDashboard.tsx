@@ -5,7 +5,6 @@ import { useAuth } from "../../context/AuthContext";
 import { useTerm } from "../../context/TermContext";
 import { dashboardService } from "../../services/dashboard.service";
 import { SearchBar } from "../ui/SearchBar";
-import { useSearch } from "../../hooks/useSearch";
 import { Card } from "../ui/Card";
 import { Badge } from "../ui/Badge";
 import { Spinner } from "../ui/Spinner";
@@ -17,7 +16,7 @@ import {
   ChartBarIcon,
   PlusIcon,
   ClipboardDocumentListIcon,
-  DocumentTextIcon, // Add this for Report Card
+  DocumentTextIcon,
 } from "@heroicons/react/24/outline";
 import { CombinedGradeEntryModal } from "../teachers/CombinedGradeEntryModal";
 import { AttendanceMarker } from "../teachers/AttendanceMarker";
@@ -40,6 +39,14 @@ export const TeacherDashboard = () => {
     queryFn: dashboardService.getTeacherDashboard,
   });
 
+  // Check if user is also a class teacher
+  const { data: classTeacherStatus } = useQuery({
+    queryKey: ["class-teacher-status"],
+    queryFn: () => dashboardService.getClassTeacherDashboard(),
+    retry: false,
+    enabled: true,
+  });
+
   const getTeacherName = () => {
     if (!user) return "Teacher";
     if (user.firstName) return user.firstName;
@@ -58,65 +65,49 @@ export const TeacherDashboard = () => {
     todayAttendance: 0,
   };
   
-  // More robust grouping that maps subjects to their assigned classes
-  const subjectsByClass = useMemo(() => {
-    if (!teacher.subjects || teacher.subjects.length === 0) return {};
-    
-    const classMap = new Map();
-    if (teacher.classes && teacher.classes.length > 0) {
-      teacher.classes.forEach((cls: any) => {
-        classMap.set(cls.id, cls.name);
-        classMap.set(cls.name, cls.name);
-      });
-    }
-    
-    const grouped = teacher.subjects.reduce((acc: any, subject: any) => {
-      let className = '';
-      
-      if (subject.className) {
-        className = subject.className;
-      } else if (subject.class?.name) {
-        className = subject.class.name;
-      } else if (subject.classId && classMap.has(subject.classId)) {
-        className = classMap.get(subject.classId);
-      } else {
-        className = 'Unassigned';
+  // Filter students by search term
+  const filteredStudents = useMemo(() => {
+    if (!studentSearchTerm) return students;
+    const term = studentSearchTerm.toLowerCase();
+    return students.filter((student: any) =>
+      student.name?.toLowerCase().includes(term) ||
+      student.admissionNo?.toLowerCase().includes(term) ||
+      student.className?.toLowerCase().includes(term)
+    );
+  }, [students, studentSearchTerm]);
+  
+  // Filter grades by search term
+  const filteredGrades = useMemo(() => {
+    if (!gradeSearchTerm) return grades;
+    const term = gradeSearchTerm.toLowerCase();
+    return grades.filter((grade: any) =>
+      grade.studentName?.toLowerCase().includes(term) ||
+      grade.subjectName?.toLowerCase().includes(term)
+    );
+  }, [grades, gradeSearchTerm]);
+
+  // Group grades for display
+  const groupedGrades = useMemo(() => {
+    const grouped = filteredGrades.reduce((acc: any, grade: any) => {
+      const key = `${grade.studentName}-${grade.subjectName}`;
+      if (!acc[key]) {
+        acc[key] = {
+          studentName: grade.studentName,
+          subjectName: grade.subjectName,
+          ca: null,
+          exam: null,
+          createdAt: grade.createdAt
+        };
       }
-      
-      if (!acc[className]) {
-        acc[className] = [];
+      if (grade.type === 'CA') {
+        acc[key].ca = grade.score;
+      } else if (grade.type === 'EXAM') {
+        acc[key].exam = grade.score;
       }
-      
-      acc[className].push({
-        id: subject.id,
-        name: subject.name,
-        subjectCode: subject.subjectCode || subject.code,
-      });
-      
       return acc;
     }, {});
-    
-    return grouped;
-  }, [teacher.subjects, teacher.classes]);
-  
-  const filteredStudents = useSearch(
-    students,
-    ['name', 'admissionNo', 'className'],
-    (student: any, term: string) => {
-      return student.name?.toLowerCase().includes(term) ||
-             student.admissionNo?.toLowerCase().includes(term) ||
-             student.className?.toLowerCase().includes(term);
-    }
-  );
-  
-  const filteredGrades = useSearch(
-    grades,
-    ['studentName', 'subjectName'],
-    (grade: any, term: string) => {
-      return grade.studentName?.toLowerCase().includes(term) ||
-             grade.subjectName?.toLowerCase().includes(term);
-    }
-  );
+    return Object.values(grouped);
+  }, [filteredGrades]);
 
   const handleCombinedGradeSubmit = async (gradeData: { 
     studentId: string; 
@@ -209,6 +200,9 @@ export const TeacherDashboard = () => {
     { name: "Today's Attendance", value: stats.todayAttendance, icon: CalendarIcon, color: "bg-yellow-500" },
   ];
 
+  // Check if teacher is also a class teacher
+  const isAlsoClassTeacher = classTeacherStatus?.class !== null && classTeacherStatus?.class !== undefined;
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -217,6 +211,15 @@ export const TeacherDashboard = () => {
           <p className="text-gray-600">Welcome back, {getTeacherName()}!</p>
         </div>
         <div className="flex gap-3">
+          {isAlsoClassTeacher && (
+            <button
+              onClick={() => navigate("/dashboard/class-teacher")}
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+            >
+              <AcademicCapIcon className="w-4 h-4" />
+              Switch to Class Teacher View
+            </button>
+          )}
           <button
             onClick={() => setShowAttendanceModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
@@ -259,7 +262,6 @@ export const TeacherDashboard = () => {
 
         <TabsContent value="overview" className="mt-6">
           <div className="grid grid-cols-1 gap-6">
-            {/* Combined Classes & Subjects Card */}
             <Card title="My Classes & Subjects">
               <div className="space-y-4">
                 {teacher.classes && teacher.classes.length > 0 ? (
@@ -375,7 +377,7 @@ export const TeacherDashboard = () => {
             </Card>
           </div>
 
-          {/* Combined Grades Card */}
+          {/* Recent Grades Card with Search */}
           <Card title="Recent Grades Entered" className="mt-6">
             <div className="space-y-4">
               <SearchBar
@@ -383,92 +385,69 @@ export const TeacherDashboard = () => {
                 placeholder="Search grades by student name or subject..."
               />
               <div className="space-y-3 max-h-96 overflow-y-auto">
-                {(() => {
-                  const groupedGrades = filteredGrades.filteredItems.reduce((acc: any, grade: any) => {
-                    const key = `${grade.studentName}-${grade.subjectName}`;
-                    if (!acc[key]) {
-                      acc[key] = {
-                        studentName: grade.studentName,
-                        subjectName: grade.subjectName,
-                        ca: null,
-                        exam: null,
-                        createdAt: grade.createdAt
-                      };
-                    }
-                    if (grade.type === 'CA') {
-                      acc[key].ca = grade.score;
-                    } else if (grade.type === 'EXAM') {
-                      acc[key].exam = grade.score;
-                    }
-                    return acc;
-                  }, {});
-
-                  const combinedGrades = Object.values(groupedGrades);
-
-                  return combinedGrades.length > 0 ? (
-                    combinedGrades.map((group: any, index: number) => {
-                      const caScore = group.ca || 0;
-                      const examScore = group.exam || 0;
-                      const totalScore = caScore + examScore;
-                      const hasBoth = group.ca !== null && group.exam !== null;
-                      
-                      return (
-                        <div key={index} className="p-4 bg-gray-50 rounded-lg">
-                          <div className="flex items-center justify-between mb-3">
-                            <div>
-                              <p className="font-bold text-gray-900">{group.studentName}</p>
-                              <p className="text-sm text-gray-500">{group.subjectName}</p>
+                {groupedGrades.length > 0 ? (
+                  groupedGrades.map((group: any, index: number) => {
+                    const caScore = group.ca || 0;
+                    const examScore = group.exam || 0;
+                    const totalScore = caScore + examScore;
+                    const hasBoth = group.ca !== null && group.exam !== null;
+                    
+                    return (
+                      <div key={index} className="p-4 bg-gray-50 rounded-lg">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <p className="font-bold text-gray-900">{group.studentName}</p>
+                            <p className="text-sm text-gray-500">{group.subjectName}</p>
+                          </div>
+                          {hasBoth && (
+                            <div className="text-right">
+                              <span className={"px-3 py-1 text-sm font-bold rounded-full " + (
+                                totalScore >= 70 ? "bg-green-100 text-green-700" :
+                                totalScore >= 50 ? "bg-yellow-100 text-yellow-700" :
+                                "bg-red-100 text-red-700"
+                              )}>
+                                Total: {totalScore}
+                              </span>
                             </div>
-                            {hasBoth && (
-                              <div className="text-right">
-                                <span className={"px-3 py-1 text-sm font-bold rounded-full " + (
-                                  totalScore >= 70 ? "bg-green-100 text-green-700" :
-                                  totalScore >= 50 ? "bg-yellow-100 text-yellow-700" :
-                                  "bg-red-100 text-red-700"
-                                )}>
-                                  Total: {totalScore}
-                                </span>
-                              </div>
-                            )}
+                          )}
+                        </div>
+                        
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="text-center p-2 bg-blue-50 rounded-lg">
+                            <p className="text-xs text-gray-500 uppercase">CA</p>
+                            <p className="text-lg font-bold text-blue-600">
+                              {group.ca !== null ? group.ca : '-'}
+                            </p>
+                            <p className="text-xs text-gray-400">40%</p>
                           </div>
                           
-                          <div className="grid grid-cols-3 gap-3">
-                            <div className="text-center p-2 bg-blue-50 rounded-lg">
-                              <p className="text-xs text-gray-500 uppercase">CA</p>
-                              <p className="text-lg font-bold text-blue-600">
-                                {group.ca !== null ? group.ca : '-'}
-                              </p>
-                              <p className="text-xs text-gray-400">40%</p>
-                            </div>
-                            
-                            <div className="text-center p-2 bg-purple-50 rounded-lg">
-                              <p className="text-xs text-gray-500 uppercase">EXAM</p>
-                              <p className="text-lg font-bold text-purple-600">
-                                {group.exam !== null ? group.exam : '-'}
-                              </p>
-                              <p className="text-xs text-gray-400">60%</p>
-                            </div>
-                            
-                            <div className="text-center p-2 bg-green-50 rounded-lg">
-                              <p className="text-xs text-gray-500 uppercase">Total</p>
-                              <p className="text-lg font-bold text-green-600">
-                                {hasBoth ? totalScore : '-'}
-                              </p>
-                              <p className="text-xs text-gray-400">100%</p>
-                            </div>
+                          <div className="text-center p-2 bg-purple-50 rounded-lg">
+                            <p className="text-xs text-gray-500 uppercase">EXAM</p>
+                            <p className="text-lg font-bold text-purple-600">
+                              {group.exam !== null ? group.exam : '-'}
+                            </p>
+                            <p className="text-xs text-gray-400">60%</p>
+                          </div>
+                          
+                          <div className="text-center p-2 bg-green-50 rounded-lg">
+                            <p className="text-xs text-gray-500 uppercase">Total</p>
+                            <p className="text-lg font-bold text-green-600">
+                              {hasBoth ? totalScore : '-'}
+                            </p>
+                            <p className="text-xs text-gray-400">100%</p>
                           </div>
                         </div>
-                      );
-                    })
-                  ) : (
-                    <div className="text-center py-8">
-                      <ChartBarIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                      <p className="text-gray-500">
-                        {gradeSearchTerm ? "No grades found matching your search" : "No grades entered yet"}
-                      </p>
-                    </div>
-                  );
-                })()}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-8">
+                    <ChartBarIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500">
+                      {gradeSearchTerm ? "No grades found matching your search" : "No grades entered yet"}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </Card>
@@ -482,8 +461,8 @@ export const TeacherDashboard = () => {
                 placeholder="Search students by name or admission number..."
               />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-96 overflow-y-auto">
-                {filteredStudents.filteredItems.length > 0 ? (
-                  filteredStudents.filteredItems.map((student: any) => (
+                {filteredStudents.length > 0 ? (
+                  filteredStudents.map((student: any) => (
                     <div key={student.id} className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                       <div className="flex items-center justify-between">
                         <div>
@@ -521,91 +500,68 @@ export const TeacherDashboard = () => {
                 placeholder="Search grades by student name or subject..."
               />
               <div className="space-y-3 max-h-96 overflow-y-auto">
-                {(() => {
-                  const groupedGrades = filteredGrades.filteredItems.reduce((acc: any, grade: any) => {
-                    const key = `${grade.studentName}-${grade.subjectName}`;
-                    if (!acc[key]) {
-                      acc[key] = {
-                        studentName: grade.studentName,
-                        subjectName: grade.subjectName,
-                        ca: null,
-                        exam: null,
-                        createdAt: grade.createdAt
-                      };
-                    }
-                    if (grade.type === 'CA') {
-                      acc[key].ca = grade.score;
-                    } else if (grade.type === 'EXAM') {
-                      acc[key].exam = grade.score;
-                    }
-                    return acc;
-                  }, {});
-
-                  const combinedGrades = Object.values(groupedGrades);
-
-                  return combinedGrades.length > 0 ? (
-                    combinedGrades.map((group: any, index: number) => {
-                      const caScore = group.ca || 0;
-                      const examScore = group.exam || 0;
-                      const totalScore = caScore + examScore;
-                      const hasBoth = group.ca !== null && group.exam !== null;
-                      
-                      return (
-                        <div key={index} className="p-4 bg-gray-50 rounded-lg">
-                          <div className="flex items-center justify-between mb-3">
-                            <div>
-                              <p className="font-bold text-gray-900">{group.studentName}</p>
-                              <p className="text-sm text-gray-500">{group.subjectName}</p>
-                              <p className="text-xs text-gray-400 mt-1">{new Date(group.createdAt).toLocaleDateString()}</p>
+                {groupedGrades.length > 0 ? (
+                  groupedGrades.map((group: any, index: number) => {
+                    const caScore = group.ca || 0;
+                    const examScore = group.exam || 0;
+                    const totalScore = caScore + examScore;
+                    const hasBoth = group.ca !== null && group.exam !== null;
+                    
+                    return (
+                      <div key={index} className="p-4 bg-gray-50 rounded-lg">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <p className="font-bold text-gray-900">{group.studentName}</p>
+                            <p className="text-sm text-gray-500">{group.subjectName}</p>
+                            <p className="text-xs text-gray-400 mt-1">{new Date(group.createdAt).toLocaleDateString()}</p>
+                          </div>
+                          {hasBoth && (
+                            <div className="text-right">
+                              <span className={"px-3 py-1 text-sm font-bold rounded-full " + (
+                                totalScore >= 70 ? "bg-green-100 text-green-700" :
+                                totalScore >= 50 ? "bg-yellow-100 text-yellow-700" :
+                                "bg-red-100 text-red-700"
+                              )}>
+                                Total: {totalScore}
+                              </span>
                             </div>
-                            {hasBoth && (
-                              <div className="text-right">
-                                <span className={"px-3 py-1 text-sm font-bold rounded-full " + (
-                                  totalScore >= 70 ? "bg-green-100 text-green-700" :
-                                  totalScore >= 50 ? "bg-yellow-100 text-yellow-700" :
-                                  "bg-red-100 text-red-700"
-                                )}>
-                                  Total: {totalScore}
-                                </span>
-                              </div>
-                            )}
+                          )}
+                        </div>
+                        
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="text-center p-2 bg-blue-50 rounded-lg">
+                            <p className="text-xs text-gray-500 uppercase">CA</p>
+                            <p className="text-lg font-bold text-blue-600">
+                              {group.ca !== null ? group.ca : '-'}
+                            </p>
+                            <p className="text-xs text-gray-400">40%</p>
                           </div>
                           
-                          <div className="grid grid-cols-3 gap-3">
-                            <div className="text-center p-2 bg-blue-50 rounded-lg">
-                              <p className="text-xs text-gray-500 uppercase">CA</p>
-                              <p className="text-lg font-bold text-blue-600">
-                                {group.ca !== null ? group.ca : '-'}
-                              </p>
-                              <p className="text-xs text-gray-400">40%</p>
-                            </div>
-                            
-                            <div className="text-center p-2 bg-purple-50 rounded-lg">
-                              <p className="text-xs text-gray-500 uppercase">EXAM</p>
-                              <p className="text-lg font-bold text-purple-600">
-                                {group.exam !== null ? group.exam : '-'}
-                              </p>
-                              <p className="text-xs text-gray-400">60%</p>
-                            </div>
-                            
-                            <div className="text-center p-2 bg-green-50 rounded-lg">
-                              <p className="text-xs text-gray-500 uppercase">Total</p>
-                              <p className="text-lg font-bold text-green-600">
-                                {hasBoth ? totalScore : '-'}
-                              </p>
-                              <p className="text-xs text-gray-400">100%</p>
-                            </div>
+                          <div className="text-center p-2 bg-purple-50 rounded-lg">
+                            <p className="text-xs text-gray-500 uppercase">EXAM</p>
+                            <p className="text-lg font-bold text-purple-600">
+                              {group.exam !== null ? group.exam : '-'}
+                            </p>
+                            <p className="text-xs text-gray-400">60%</p>
+                          </div>
+                          
+                          <div className="text-center p-2 bg-green-50 rounded-lg">
+                            <p className="text-xs text-gray-500 uppercase">Total</p>
+                            <p className="text-lg font-bold text-green-600">
+                              {hasBoth ? totalScore : '-'}
+                            </p>
+                            <p className="text-xs text-gray-400">100%</p>
                           </div>
                         </div>
-                      );
-                    })
-                  ) : (
-                    <div className="text-center py-8">
-                      <ChartBarIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                      <p className="text-gray-500">No grades entered yet</p>
-                    </div>
-                  );
-                })()}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-8">
+                    <ChartBarIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500">No grades entered yet</p>
+                  </div>
+                )}
               </div>
             </div>
           </Card>

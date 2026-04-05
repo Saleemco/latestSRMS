@@ -34,7 +34,7 @@ export const TermProvider = ({ children }: { children: React.ReactNode }) => {
   // Load terms when selectedSession changes
   useEffect(() => {
     if (selectedSession?.id) {
-      console.log('🔄 Loading terms for session:', selectedSession.name);
+      console.log('🔄 Loading terms for session:', selectedSession.name, selectedSession.id);
       loadTerms(selectedSession.id);
     }
   }, [selectedSession?.id]);
@@ -53,10 +53,10 @@ export const TermProvider = ({ children }: { children: React.ReactNode }) => {
       
       // Set selected session (prefer active, fallback to first)
       if (activeSessionData) {
-        console.log('📌 Setting selected session to active:', activeSessionData.name);
+        console.log('📌 Setting selected session to active:', activeSessionData.name, activeSessionData.id);
         setSelectedSession(activeSessionData);
       } else if (sessionsData.length > 0) {
-        console.log('📌 Setting selected session to first:', sessionsData[0].name);
+        console.log('📌 Setting selected session to first:', sessionsData[0].name, sessionsData[0].id);
         setSelectedSession(sessionsData[0]);
       }
     } catch (error) {
@@ -71,6 +71,7 @@ export const TermProvider = ({ children }: { children: React.ReactNode }) => {
       console.log('📖 Loading terms for session ID:', sessionId);
       const termsData = await termService.getAll(sessionId);
       console.log('📋 Terms loaded:', termsData.length);
+      console.log('📋 Terms details:', termsData.map(t => ({ id: t.id, name: t.name, isActive: t.isActive })));
       setTerms(termsData);
       
       // Find active term
@@ -79,10 +80,10 @@ export const TermProvider = ({ children }: { children: React.ReactNode }) => {
       
       // Set selected term
       if (activeTermData) {
-        console.log('📌 Setting selected term to active:', activeTermData.name);
+        console.log('📌 Setting selected term to active:', activeTermData.name, activeTermData.id);
         setSelectedTerm(activeTermData);
       } else if (termsData.length > 0) {
-        console.log('📌 Setting selected term to first:', termsData[0].name);
+        console.log('📌 Setting selected term to first:', termsData[0].name, termsData[0].id);
         setSelectedTerm(termsData[0]);
       } else {
         setSelectedTerm(null);

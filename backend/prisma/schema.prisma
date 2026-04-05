@@ -45,14 +45,15 @@ model Student {
 }
 
 model Teacher {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  user      User     @relation(fields: [userId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  user           User      @relation(fields: [userId], references: [id])
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  subjects  Subject[]
-  classes   Class[]
+  subjects       Subject[]  // Subjects they teach
+  classes        Class[]    // Classes they teach as regular teacher (for subject teaching)
+  classTaught    Class?     @relation("ClassTeacher") // The class they are class teacher for
 }
 
 model Parent {
@@ -66,13 +67,15 @@ model Parent {
 }
 
 model Class {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  grade     Int
-  teacherId String?
-  teacher   Teacher? @relation(fields: [teacherId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String    @id @default(cuid())
+  name           String    @unique
+  grade          Int
+  teacherId      String?
+  teacher        Teacher?  @relation(fields: [teacherId], references: [id])
+  classTeacherId String?   @unique  // Unique for one-to-one relationship
+  classTeacher   Teacher?  @relation("ClassTeacher", fields: [classTeacherId], references: [id])
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   students    Student[]
   subjects    SubjectClass[]
@@ -244,14 +247,10 @@ enum AttendanceStatus {
   EXCUSED
 }
 
-
-
 enum GradeType {
-  // Continuous Assessment (CA) - 40%
-  CA           // <-- Add this for generic CA grades
+  CA
   HOMEWORK
   MIDTERM
-  // Examination (EXAM) - 60%
   EXAM
 }
 

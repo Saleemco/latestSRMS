@@ -4,6 +4,7 @@ import { feeService, CreateFeeData } from '../../services/fee.service';
 import { studentService } from '../../services/student.service';
 import { termService } from '../../services/term.service';
 import { useQuery } from '@tanstack/react-query';
+import { useTerm } from '../../context/TermContext';
 import toast from 'react-hot-toast';
 
 interface CreateFeeModalProps {
@@ -13,6 +14,7 @@ interface CreateFeeModalProps {
 }
 
 export const CreateFeeModal = ({ isOpen, onClose, onSuccess }: CreateFeeModalProps) => {
+  const { selectedTerm, activeTerm, terms, selectedSession, setSelectedTerm } = useTerm();
   const [formData, setFormData] = useState<CreateFeeData>({
     studentId: '',
     termId: '',
@@ -25,22 +27,23 @@ export const CreateFeeModal = ({ isOpen, onClose, onSuccess }: CreateFeeModalPro
     queryFn: studentService.getAll,
   });
 
-  const { data: terms, isLoading: termsLoading } = useQuery({
-    queryKey: ['terms'],
-    queryFn: termService.getAll,
-  });
+  // Get terms filtered by selected session
+  const filteredTerms = terms?.filter(term => term.sessionId === selectedSession?.id) || [];
 
-  const { data: activeTerm } = useQuery({
-    queryKey: ['active-term'],
-    queryFn: termService.getActive,
-  });
-
-  // Set active term as default when available
+  // Set default term when modal opens - ALWAYS use the currently selected term from the filter
   useEffect(() => {
-    if (activeTerm && !formData.termId && isOpen) {
-      setFormData(prev => ({ ...prev, termId: activeTerm.id }));
+    if (isOpen) {
+      // Use the term that is currently selected in the filter
+      const defaultTermId = selectedTerm?.id || '';
+      console.log('📝 CreateFeeModal - Setting default term:', {
+        selectedTermId: defaultTermId,
+        selectedTermName: selectedTerm?.name,
+        selectedSessionName: selectedSession?.name,
+        availableTerms: filteredTerms.map(t => ({ id: t.id, name: t.name, session: t.session?.name }))
+      });
+      setFormData(prev => ({ ...prev, termId: defaultTermId }));
     }
-  }, [activeTerm, isOpen]);
+  }, [isOpen, selectedTerm, selectedSession]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -72,19 +75,33 @@ export const CreateFeeModal = ({ isOpen, onClose, onSuccess }: CreateFeeModalPro
     
     try {
       const selectedStudent = students?.find(s => s.id === formData.studentId);
-      const selectedTerm = terms?.find(t => t.id === formData.termId);
+      const selectedTermData = terms?.find(t => t.id === formData.termId);
       
-      console.log('📝 Creating fee for student:', selectedStudent);
-      console.log('📝 Fee data:', formData);
-      console.log('📝 Selected term:', selectedTerm);
+      console.log('📝 Creating fee with data:', {
+        studentId: formData.studentId,
+        studentName: `${selectedStudent?.firstName} ${selectedStudent?.lastName}`,
+        termId: formData.termId,
+        termName: selectedTermData?.name,
+        termSession: selectedTermData?.session?.name,
+        amount: formData.totalAmount
+      });
       
-      const result = await feeService.create(formData);
-      console.log('✅ Fee created result:', result);
+      const result = await feeService.create({
+        studentId: formData.studentId,
+        termId: formData.termId,
+        totalAmount: formData.totalAmount
+      });
       
-      toast.success('Fee record created successfully');
+      console.log('✅ Fee created successfully:', result);
+      
+      toast.success(`Fee record created for ${selectedStudent?.firstName} ${selectedStudent?.lastName}`);
       onSuccess();
       onClose();
-      setFormData({ studentId: '', termId: activeTerm?.id || '', totalAmount: 0 });
+      setFormData({ 
+        studentId: '', 
+        termId: selectedTerm?.id || '', 
+        totalAmount: 0 
+      });
     } catch (error: any) {
       console.error('❌ Error creating fee:', error);
       console.error('Error response:', error.response?.data);
@@ -95,9 +112,6 @@ export const CreateFeeModal = ({ isOpen, onClose, onSuccess }: CreateFeeModalPro
   };
 
   if (!isOpen) return null;
-
-  const activeTermData = terms?.find(t => t.id === activeTerm?.id);
-  const isLoading = studentsLoading || termsLoading;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -125,7 +139,7 @@ export const CreateFeeModal = ({ isOpen, onClose, onSuccess }: CreateFeeModalPro
               <option value="">Choose a student</option>
               {students?.map((student: any) => (
                 <option key={student.id} value={student.id}>
-                  {student.firstName} {student.lastName} {student.admissionNo ? `- ${student.admissionNo}` : ''}
+                  {student.firstName} {student.lastName} {student.admissionNo ? `- ${student.admissionNo}` : ''} ({student.class?.name || 'No Class'})
                 </option>
               ))}
             </select>
@@ -141,12 +155,12 @@ export const CreateFeeModal = ({ isOpen, onClose, onSuccess }: CreateFeeModalPro
               value={formData.termId}
               onChange={handleChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              disabled={isSubmitting || termsLoading}
+              disabled={isSubmitting}
             >
               <option value="">Choose a term</option>
-              {terms?.map((term: any) => (
+              {filteredTerms.map((term: any) => (
                 <option key={term.id} value={term.id}>
-                  {term.name} - {term.academicYear} {term.isActive ? '(Active)' : ''}
+                  {term.name} - {term.academicYear || term.session?.name} {term.isActive ? '(Active)' : ''}
                 </option>
               ))}
             </select>
@@ -170,16 +184,21 @@ export const CreateFeeModal = ({ isOpen, onClose, onSuccess }: CreateFeeModalPro
             />
           </div>
 
-          {activeTermData && (
-            <div className="bg-blue-50 p-3 rounded-lg">
-              <p className="text-sm text-blue-700">
-                <strong>Active Term:</strong> {activeTermData.name} - {activeTermData.academicYear}
+          {/* Current Selection Info */}
+          <div className="bg-blue-50 p-3 rounded-lg">
+            <p className="text-sm text-blue-700 font-medium">Current Selection:</p>
+            <p className="text-xs text-blue-600 mt-1">
+              <strong>Session:</strong> {selectedSession?.name || 'Not selected'}
+            </p>
+            <p className="text-xs text-blue-600">
+              <strong>Term:</strong> {selectedTerm?.name || 'Not selected'}
+            </p>
+            {formData.termId && selectedTerm?.id !== formData.termId && (
+              <p className="text-xs text-yellow-600 mt-1">
+                ⚠️ Note: You're creating a fee for a different term than the one currently selected in the filter.
               </p>
-              <p className="text-xs text-blue-600 mt-1">
-                Dates: {new Date(activeTermData.startDate).toLocaleDateString()} to {new Date(activeTermData.endDate).toLocaleDateString()}
-              </p>
-            </div>
-          )}
+            )}
+          </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t">
             <button
@@ -193,7 +212,7 @@ export const CreateFeeModal = ({ isOpen, onClose, onSuccess }: CreateFeeModalPro
             <button
               type="submit"
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-              disabled={isSubmitting || isLoading}
+              disabled={isSubmitting || studentsLoading}
             >
               {isSubmitting ? 'Creating...' : 'Create Fee Record'}
             </button>

@@ -8,7 +8,7 @@ export interface StudentFee {
   totalAmount: number;
   amountPaid: number;
   balance: number;
-  status: 'PAID' | 'PARTIALLY_PAID' | 'UNPAID';
+  status: 'PAID' | 'PARTIALLY_PAID' | 'PENDING' | 'OVERDUE';
   receiptNo?: string;
   createdAt: string;
   updatedAt: string;
@@ -19,16 +19,22 @@ export interface StudentFee {
       firstName: string;
       lastName: string;
       email: string;
+      name?: string;
     };
     class?: {
+      id: string;
       name: string;
       section: string;
     };
   };
   term?: {
+    id: string;
     name: string;
-    session: {
-      year: string;
+    academicYear?: string;
+    session?: {
+      id: string;
+      name: string;
+      year?: string;
     };
   };
   payments?: Payment[];
@@ -39,7 +45,7 @@ export interface Payment {
   feeId: string;
   amount: number;
   date: string;
-  method: 'CASH' | 'BANK_TRANSFER' | 'POS' | 'ONLINE';
+  method: 'CASH' | 'BANK_TRANSFER' | 'POS' | 'ONLINE' | 'CHEQUE' | 'MOBILE_MONEY';
   reference?: string;
   recordedBy?: {
     firstName: string;
@@ -55,7 +61,7 @@ export interface CreateFeeData {
 
 export interface RecordPaymentData {
   amount: number;
-  method: 'CASH' | 'BANK_TRANSFER' | 'POS' | 'ONLINE';
+  method: 'CASH' | 'BANK_TRANSFER' | 'POS' | 'ONLINE' | 'CHEQUE' | 'MOBILE_MONEY';
   reference?: string;
 }
 
@@ -66,14 +72,27 @@ export interface FeeSummary {
   collectionRate: number;
 }
 
+export interface Class {
+  id: string;
+  name: string;
+  section?: string;
+  grade?: number;
+  studentCount?: number;
+}
+
 export const feeService = {
-  // Get all fees
-  getAll: async (): Promise<StudentFee[]> => {
+  // Get all fees with optional term/session filters
+  getAll: async (params?: { termId?: string; sessionId?: string }): Promise<StudentFee[]> => {
     try {
-      console.log('💰 Fetching fees from API...');
-      const response = await api.get('/fees');
-      console.log('✅ Fees response:', response.data);
-      return response.data?.data || [];
+      console.log('💰 Fetching fees from API...', params);
+      const queryParams = new URLSearchParams();
+      if (params?.termId) queryParams.append('termId', params.termId);
+      if (params?.sessionId) queryParams.append('sessionId', params.sessionId);
+      
+      const url = queryParams.toString() ? `/fees?${queryParams}` : '/fees';
+      const response = await api.get(url);
+      console.log('✅ Fees response:', response.data?.data?.length || response.data?.length || 0, 'fees');
+      return response.data?.data || response.data || [];
     } catch (error: any) {
       console.error('❌ Error fetching fees:', error);
       toast.error('Failed to load fees');
@@ -103,30 +122,29 @@ export const feeService = {
     }
   },
 
-  // Get fees for parent's children - UPDATED with grouping
+  // Get fees for parent's children
   getParentFees: async () => {
     try {
       console.log('👪 Fetching parent fees from API...');
       const response = await api.get('/fees/parent');
       console.log('✅ Parent fees response:', response.data);
       
-      // The backend returns { data: { fees: [], totalOutstanding: 0 } }
       const result = response.data?.data || { fees: [], totalOutstanding: 0 };
       
-      // Transform the data to match the ParentFees component structure
-      // Group fees by student
       const feesByStudent: Record<string, any> = {};
       
       result.fees.forEach((fee: any) => {
         const studentId = fee.studentId;
         if (!feesByStudent[studentId]) {
-          // Parse name from user.name
           let firstName = 'Unknown';
           let lastName = '';
           if (fee.student?.user?.name) {
             const nameParts = fee.student.user.name.split(' ');
             firstName = nameParts[0] || 'Unknown';
             lastName = nameParts.slice(1).join(' ') || '';
+          } else if (fee.student?.user?.firstName) {
+            firstName = fee.student.user.firstName;
+            lastName = fee.student.user.lastName || '';
           }
           
           feesByStudent[studentId] = {
@@ -150,7 +168,6 @@ export const feeService = {
       });
       
       const groupedFees = Object.values(feesByStudent);
-      
       console.log(`✅ Grouped ${groupedFees.length} children with fees`);
       
       return {
@@ -169,11 +186,26 @@ export const feeService = {
     try {
       console.log('📝 Creating fee record:', data);
       const response = await api.post('/fees', data);
+      console.log('✅ Fee created successfully:', response.data?.data);
       toast.success('Fee record created successfully');
       return response.data?.data || response.data;
     } catch (error: any) {
       console.error('❌ Error creating fee:', error);
       toast.error(error.response?.data?.message || 'Failed to create fee');
+      throw error;
+    }
+  },
+
+  // Bulk create fees by class
+  bulkCreate: async (data: { classFees: Array<{ classId: string; amount: number; className?: string }>, termId: string }): Promise<any> => {
+    try {
+      console.log('📦 Bulk creating fees:', data);
+      const response = await api.post('/fees/bulk', data);
+      toast.success(response.data?.message || 'Bulk fees created successfully');
+      return response.data;
+    } catch (error: any) {
+      console.error('❌ Error bulk creating fees:', error);
+      toast.error(error.response?.data?.message || 'Failed to bulk create fees');
       throw error;
     }
   },
@@ -205,7 +237,7 @@ export const feeService = {
     }
   },
 
-  // Delete fee
+  // Delete single fee
   delete: async (id: string): Promise<void> => {
     try {
       await api.delete('/fees/' + id);
@@ -217,10 +249,29 @@ export const feeService = {
     }
   },
 
-  // Get fee summary
-  getSummary: async (): Promise<FeeSummary> => {
+  // Bulk delete fees
+  bulkDelete: async (feeIds: string[]): Promise<void> => {
     try {
-      const response = await api.get('/fees/summary');
+      console.log(`🗑️ Bulk deleting ${feeIds.length} fees...`);
+      const response = await api.post('/fees/bulk-delete', { feeIds });
+      console.log('✅ Bulk delete response:', response.data);
+      toast.success(response.data?.message || `${feeIds.length} fee record(s) deleted successfully`);
+    } catch (error: any) {
+      console.error('❌ Error bulk deleting fees:', error);
+      console.error('Error response:', error.response?.data);
+      toast.error(error.response?.data?.message || error.message || 'Failed to delete fee records');
+      throw error;
+    }
+  },
+
+  // Get fee summary with optional term/session filters
+  getSummary: async (termId?: string, sessionId?: string): Promise<FeeSummary> => {
+    try {
+      const params: any = {};
+      if (termId) params.termId = termId;
+      if (sessionId) params.sessionId = sessionId;
+      
+      const response = await api.get('/fees/summary', { params });
       return response.data?.data || {
         totalExpected: 0,
         totalCollected: 0,
@@ -235,6 +286,18 @@ export const feeService = {
         totalOutstanding: 0,
         collectionRate: 0
       };
+    }
+  },
+
+  // Get all classes for filter
+  getClasses: async (): Promise<Class[]> => {
+    try {
+      const response = await api.get('/classes');
+      console.log('📚 Classes response:', response.data?.length || 0);
+      return response.data || [];
+    } catch (error: any) {
+      console.error('Error fetching classes:', error);
+      return [];
     }
   },
 
