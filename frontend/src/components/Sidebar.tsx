@@ -1,4 +1,4 @@
-﻿import { Fragment } from "react";
+﻿import { Fragment, useMemo } from "react";
 import { Dialog, Transition } from "@headlessui/react";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { NavLink } from "react-router-dom";
@@ -13,6 +13,7 @@ import {
     BookOpenIcon,
     DocumentTextIcon,
     UserGroupIcon,
+    CalendarIcon,
 } from "@heroicons/react/24/outline";
 
 interface SidebarProps {
@@ -20,66 +21,80 @@ interface SidebarProps {
     onClose: () => void;
 }
 
-const navigation = [
-    { name: "Dashboard", href: "/dashboard", icon: HomeIcon },
-    { name: "Students", href: "/students", icon: UsersIcon },
-    { name: "Teachers", href: "/teachers", icon: AcademicCapIcon },
-    { name: "Classes", href: "/classes", icon: AcademicCapIcon },
-    { name: "Subjects", href: "/subjects", icon: BookOpenIcon },
-    { name: "Results", href: "/results", icon: ChartBarIcon },
-    { name: "Report Card", href: "/teacher/report-card", icon: DocumentTextIcon },
-    { name: "Fees", href: "/fees", icon: CurrencyDollarIcon },
-    { name: "Class Teacher", href: "/admin/class-teacher-assignment", icon: UserGroupIcon },
-    { name: "Settings", href: "/settings", icon: Cog6ToothIcon },
-];
-
 export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     const { user } = useAuth();
 
-    const getFeesHref = () => {
-        if (user?.role === "PARENT") {
-            return "/parent-fees";
-        }
-        return "/fees";
-    };
+    // Build navigation items dynamically based on user role
+    const navigationItems = useMemo(() => {
+        const items = [];
 
-    const getResultsHref = () => {
-        if (user?.role === "TEACHER" || user?.role === "CLASS_TEACHER") {
-            return "/teacher-results";
-        }
-        return "/results";
-    };
+        // Dashboard - everyone sees this
+        items.push({ name: "Dashboard", href: "/dashboard", icon: HomeIcon });
 
-    const getReportCardHref = () => {
-        if (user?.role === "PARENT") {
-            return "/parent/report-card";
+        // Students - different for Class Teachers vs others
+        if (user?.role === "CLASS_TEACHER") {
+            items.push({ name: "Students", href: "/class-teacher/students", icon: UsersIcon });
+        } else if (user?.role === "TEACHER" || user?.role === "ADMIN" || user?.role === "PRINCIPAL") {
+            items.push({ name: "Students", href: "/students", icon: UsersIcon });
         }
-        return "/teacher/report-card";
-    };
 
-    const filteredNavigation = navigation.filter(item => {
-        // Admin and Principal can see everything
+        // Teachers - only Admin/Principal
         if (user?.role === "ADMIN" || user?.role === "PRINCIPAL") {
-            return true;
+            items.push({ name: "Teachers", href: "/teachers", icon: AcademicCapIcon });
         }
-        
-        // Parent restrictions
-        if (user?.role === "PARENT") {
-            return ["Dashboard", "Results", "Report Card", "Fees"].includes(item.name);
+
+        // Classes - only Admin/Principal
+        if (user?.role === "ADMIN" || user?.role === "PRINCIPAL") {
+            items.push({ name: "Classes", href: "/classes", icon: AcademicCapIcon });
         }
-        
-        // Teacher restrictions
-        if (user?.role === "TEACHER" || user?.role === "CLASS_TEACHER") {
-            return ["Dashboard", "Students", "Results", "Report Card", "Subjects"].includes(item.name);
+
+        // Subjects - Admin, Principal, Teacher, Class Teacher
+        if (user?.role === "ADMIN" || user?.role === "PRINCIPAL" || user?.role === "TEACHER" || user?.role === "CLASS_TEACHER") {
+            items.push({ name: "Subjects", href: "/subjects", icon: BookOpenIcon });
         }
-        
-        // Bursar restrictions
-        if (user?.role === "BURSAR") {
-            return ["Dashboard", "Fees"].includes(item.name);
+
+        // Results - Admin, Principal, Teacher, Class Teacher
+        if (user?.role === "ADMIN" || user?.role === "PRINCIPAL" || user?.role === "TEACHER" || user?.role === "CLASS_TEACHER") {
+            items.push({ name: "Results", href: "/teacher-results", icon: ChartBarIcon });
         }
-        
-        return true;
-    });
+
+        // Report Card - everyone except Bursar
+        if (user?.role !== "BURSAR") {
+            let reportCardHref = "/teacher/report-card";
+            if (user?.role === "PARENT") reportCardHref = "/parent/report-card";
+            if (user?.role === "STUDENT") reportCardHref = "/student/report-card";
+            items.push({ name: "Report Card", href: reportCardHref, icon: DocumentTextIcon });
+        }
+
+        // Fees - Admin, Principal, Bursar, Parent
+        if (user?.role === "ADMIN" || user?.role === "PRINCIPAL" || user?.role === "BURSAR") {
+            items.push({ name: "Fees", href: "/fees", icon: CurrencyDollarIcon });
+        } else if (user?.role === "PARENT") {
+            items.push({ name: "Fees", href: "/parent-fees", icon: CurrencyDollarIcon });
+        }
+
+        // Sessions - only Admin/Principal
+        if (user?.role === "ADMIN" || user?.role === "PRINCIPAL") {
+            items.push({ name: "Sessions", href: "/admin/sessions", icon: CalendarIcon });
+        }
+
+        // Terms - only Admin/Principal
+        if (user?.role === "ADMIN" || user?.role === "PRINCIPAL") {
+            items.push({ name: "Terms", href: "/admin/terms", icon: CalendarIcon });
+        }
+
+        // Class Teacher Assignment - only Admin/Principal
+        if (user?.role === "ADMIN" || user?.role === "PRINCIPAL") {
+            items.push({ name: "Class Teacher", href: "/admin/class-teacher-assignment", icon: UserGroupIcon });
+        }
+
+        // Settings - only Admin/Principal
+        if (user?.role === "ADMIN" || user?.role === "PRINCIPAL") {
+            items.push({ name: "Settings", href: "/settings", icon: Cog6ToothIcon });
+        }
+
+        return items;
+    }, [user?.role]);
 
     return (
         <>
@@ -124,7 +139,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
                                         </button>
                                     </div>
                                 </Transition.Child>
-                                <SidebarContent navigation={filteredNavigation} getFeesHref={getFeesHref} getResultsHref={getResultsHref} getReportCardHref={getReportCardHref} />
+                                <SidebarContent navigation={navigationItems} />
                             </Dialog.Panel>
                         </Transition.Child>
                     </div>
@@ -132,13 +147,13 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
             </Transition.Root>
 
             <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
-                <SidebarContent navigation={filteredNavigation} getFeesHref={getFeesHref} getResultsHref={getResultsHref} getReportCardHref={getReportCardHref} />
+                <SidebarContent navigation={navigationItems} />
             </div>
         </>
     );
 };
 
-const SidebarContent = ({ navigation, getFeesHref, getResultsHref, getReportCardHref }: { navigation: typeof navigation, getFeesHref: () => string, getResultsHref: () => string, getReportCardHref: () => string }) => (
+const SidebarContent = ({ navigation }: { navigation: any[] }) => (
     <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-white px-6 pb-4 border-r border-gray-200">
         <div className="flex h-16 shrink-0 items-center">
             <img
@@ -152,31 +167,20 @@ const SidebarContent = ({ navigation, getFeesHref, getResultsHref, getReportCard
             <ul role="list" className="flex flex-1 flex-col gap-y-7">
                 <li>
                     <ul role="list" className="-mx-2 space-y-1">
-                        {navigation.map((item) => {
-                            let href = item.href;
-                            if (item.name === "Fees") {
-                                href = getFeesHref();
-                            } else if (item.name === "Results") {
-                                href = getResultsHref();
-                            } else if (item.name === "Report Card") {
-                                href = getReportCardHref();
-                            }
-
-                            return (
-                                <li key={item.name}>
-                                    <NavLink
-                                        to={href}
-                                        className={({ isActive }) => {
-                                            return 'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold ' +
-                                                (isActive ? 'bg-gray-50 text-indigo-600' : 'text-gray-700 hover:text-indigo-600 hover:bg-gray-50');
-                                        }}
-                                    >
-                                        <item.icon className="h-6 w-6 shrink-0 text-gray-400 group-hover:text-indigo-600" aria-hidden="true" />
-                                        {item.name}
-                                    </NavLink>
-                                </li>
-                            );
-                        })}
+                        {navigation.map((item) => (
+                            <li key={item.name}>
+                                <NavLink
+                                    to={item.href}
+                                    className={({ isActive }) => {
+                                        return 'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold ' +
+                                            (isActive ? 'bg-gray-50 text-indigo-600' : 'text-gray-700 hover:text-indigo-600 hover:bg-gray-50');
+                                    }}
+                                >
+                                    <item.icon className="h-6 w-6 shrink-0 text-gray-400 group-hover:text-indigo-600" aria-hidden="true" />
+                                    {item.name}
+                                </NavLink>
+                            </li>
+                        ))}
                     </ul>
                 </li>
             </ul>

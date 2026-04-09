@@ -20,7 +20,8 @@ import NotFound from "./pages/NotFound";
 import TeacherResults from "./pages/TeacherResults";
 import ReportCard from "./pages/ReportCard";
 import ParentReportCard from "./pages/ParentReportCard";
-import { ClassTeacherDashboard } from "./components/dashboards/ClassTeacherDashboard"; // ADD THIS IMPORT
+import { ClassTeacherDashboard } from "./components/dashboards/ClassTeacherDashboard";
+import ClassTeacherStudents from "./pages/ClassTeacherStudents";
 
 const queryClient = new QueryClient();
 
@@ -41,10 +42,17 @@ function App() {
                 <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="dashboard" element={<Dashboard />} />
                 
-                {/* ADD THIS NEW ROUTE - Class Teacher Dashboard */}
+                {/* Class Teacher Dashboard Route */}
                 <Route path="dashboard/class-teacher" element={
                   <ProtectedRoute allowedRoles={['TEACHER', 'CLASS_TEACHER', 'ADMIN', 'PRINCIPAL']}>
                     <ClassTeacherDashboard />
+                  </ProtectedRoute>
+                } />
+                
+                {/* Class Teacher Students Route - shows only homeroom students */}
+                <Route path="class-teacher/students" element={
+                  <ProtectedRoute allowedRoles={['CLASS_TEACHER']}>
+                    <ClassTeacherStudents />
                   </ProtectedRoute>
                 } />
                 
@@ -53,37 +61,46 @@ function App() {
                 <Route path="classes" element={<Classes />} />
                 <Route path="subjects" element={<Subjects />} />
                 <Route path="results" element={<Results />} />
+                
+                {/* Teacher Results - accessible by ADMIN, PRINCIPAL, TEACHER, CLASS_TEACHER */}
                 <Route path="teacher-results" element={
-                  <ProtectedRoute allowedRoles={['TEACHER', 'CLASS_TEACHER']}>
+                  <ProtectedRoute allowedRoles={['TEACHER', 'CLASS_TEACHER', 'ADMIN', 'PRINCIPAL']}>
                     <TeacherResults />
                   </ProtectedRoute>
                 } />
+                
                 <Route path="teacher/report-card" element={
                   <ProtectedRoute allowedRoles={['TEACHER', 'CLASS_TEACHER', 'ADMIN', 'PRINCIPAL']}>
                     <ReportCard />
                   </ProtectedRoute>
                 } />
+                
                 <Route path="parent/report-card" element={
                   <ProtectedRoute allowedRoles={['PARENT']}>
                     <ParentReportCard />
                   </ProtectedRoute>
                 } />
+                
                 <Route path="fees" element={<Fees />} />
+                
                 <Route path="parent-fees" element={
                   <ProtectedRoute allowedRoles={['PARENT']}>
                     <ParentFees />
                   </ProtectedRoute>
                 } />
+                
                 <Route path="admin/terms" element={
                   <ProtectedRoute allowedRoles={['ADMIN', 'PRINCIPAL']}>
                     <TermManagement />
                   </ProtectedRoute>
                 } />
+                
                 <Route path="admin/sessions" element={
                   <ProtectedRoute allowedRoles={['ADMIN', 'PRINCIPAL']}>
                     <SessionManagement />
                   </ProtectedRoute>
                 } />
+                
                 <Route path="admin/class-teacher-assignment" element={
                   <ProtectedRoute allowedRoles={['ADMIN', 'PRINCIPAL']}>
                     <ClassTeacherAssignment />

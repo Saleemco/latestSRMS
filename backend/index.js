@@ -933,6 +933,7 @@ app.get('/api/classes', async (req, res) => {
 });
 
 // Get class teacher dashboard
+// Get class teacher dashboard - Complete version
 app.get('/api/dashboard/class-teacher', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -948,6 +949,7 @@ app.get('/api/dashboard/class-teacher', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     
+    // Get teacher with their assigned homeroom class
     const teacher = await prisma.teacher.findFirst({
       where: { userId },
       include: {
@@ -957,29 +959,18 @@ app.get('/api/dashboard/class-teacher', async (req, res) => {
             students: {
               include: {
                 user: true,
-                attendances: {
-                  orderBy: { date: 'desc' },
-                  take: 30
-                },
+                attendances: true,
                 grades: {
-                  include: { subject: true },
-                  take: 50,
-                  orderBy: { createdAt: 'desc' }
+                  include: { subject: true }
                 }
+              },
+              orderBy: {
+                user: { name: 'asc' }
               }
             },
             subjects: {
               include: {
                 subject: true
-              }
-            }
-          }
-        },
-        subjects: {
-          include: {
-            classes: {
-              include: {
-                class: true
               }
             }
           }
@@ -991,98 +982,131 @@ app.get('/api/dashboard/class-teacher', async (req, res) => {
       return res.status(404).json({ error: 'Teacher not found' });
     }
     
-    const classData = teacher.classTaught;
-    
-    // Calculate class statistics
-    let totalStudents = 0;
-    let attendanceRate = 0;
-    let averageGrade = 0;
-    let todayAttendance = { present: 0, absent: 0, late: 0, total: 0 };
-    
-    if (classData) {
-      totalStudents = classData.students.length;
-      
-      // Calculate attendance rate for last 30 days
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      
-      const recentAttendances = classData.students.flatMap(s => 
-        s.attendances.filter(a => new Date(a.date) >= thirtyDaysAgo)
-      );
-      
-      const presentCount = recentAttendances.filter(a => a.status === 'PRESENT').length;
-      attendanceRate = recentAttendances.length > 0 
-        ? (presentCount / recentAttendances.length) * 100 
-        : 0;
-      
-      // Calculate average grade
-      const allGrades = classData.students.flatMap(s => s.grades);
-      const totalScore = allGrades.reduce((sum, g) => sum + g.score, 0);
-      averageGrade = allGrades.length > 0 ? totalScore / allGrades.length : 0;
-      
-      // Today's attendance
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      const todayAttendances = await prisma.attendance.findMany({
-        where: {
-          classId: classData.id,
-          date: today
+    if (!teacher.classTaught) {
+      return res.status(200).json({
+        data: {
+          hasClass: false,
+          message: 'You are not assigned as a class teacher. Please contact admin.'
         }
       });
-      
-      todayAttendance = {
-        present: todayAttendances.filter(a => a.status === 'PRESENT').length,
-        absent: todayAttendances.filter(a => a.status === 'ABSENT').length,
-        late: todayAttendances.filter(a => a.status === 'LATE').length,
-        total: totalStudents
-      };
     }
     
-    // Get subjects teacher teaches (as regular teacher)
-    const teachingSubjects = teacher.subjects.map(sub => ({
-      id: sub.id,
-      name: sub.name,
-      classes: sub.classes.map(sc => sc.class?.name).filter(Boolean)
-    }));
+    const myClass = teacher.classTaught;
+    const students = myClass.students;
     
-    res.json({
-      data: {
-        teacher: {
-          id: teacher.id,
-          name: teacher.user?.name,
-          email: teacher.user?.email,
-          role: 'CLASS_TEACHER'
-        },
-        class: classData ? {
-          id: classData.id,
-          name: classData.name,
-          totalStudents,
-          subjects: classData.subjects.map(s => s.subject.name),
-          attendanceRate: attendanceRate.toFixed(1),
-          averageGrade: averageGrade.toFixed(1),
-          todayAttendance
-        } : null,
-        teachingSubjects,
-        recentActivities: {
-          recentAttendances: classData?.students.flatMap(s => 
-            s.attendances.slice(0, 5).map(a => ({
-              studentName: s.user?.name,
-              date: a.date,
-              status: a.status
-            }))
-          ).slice(0, 10),
-          recentGrades: classData?.students.flatMap(s =>
-            s.grades.slice(0, 5).map(g => ({
-              studentName: s.user?.name,
-              subject: g.subject?.name,
-              score: g.score,
-              type: g.type
-            }))
-          ).slice(0, 10)
+    // Calculate today's date boundaries
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    // Get today's attendance
+    const todayAttendanceRecords = await prisma.attendance.findMany({
+      where: {
+        classId: myClass.id,
+        date: {
+          gte: today,
+          lt: tomorrow
         }
       }
     });
+    
+    const attendanceMap = {};
+    todayAttendanceRecords.forEach(record => {
+      attendanceMap[record.studentId] = record.status;
+    });
+    
+    // Process students with their attendance and grades
+    const processedStudents = students.map(student => {
+      // Calculate attendance percentage for this student
+      const studentAttendances = student.attendances || [];
+      const presentCount = studentAttendances.filter(a => a.status === 'PRESENT').length;
+      const attendancePercentage = studentAttendances.length > 0 
+        ? (presentCount / studentAttendances.length) * 100 
+        : 0;
+      
+      // Calculate average grade for this student
+      const studentGrades = student.grades || [];
+      let averageScore = 0;
+      if (studentGrades.length > 0) {
+        const totalScore = studentGrades.reduce((sum, g) => sum + (g.percentage || g.score), 0);
+        averageScore = totalScore / studentGrades.length;
+      }
+      
+      // Get today's attendance status
+      const todayStatus = attendanceMap[student.id] || 'NOT_MARKED';
+      
+      return {
+        id: student.id,
+        name: student.user?.name || 'Unknown',
+        firstName: student.user?.name?.split(' ')[0] || '',
+        lastName: student.user?.name?.split(' ').slice(1).join(' ') || '',
+        admissionNo: student.admissionNo,
+        gender: student.gender,
+        email: student.user?.email,
+        attendanceRate: attendancePercentage.toFixed(1),
+        averageScore: averageScore.toFixed(1),
+        todayStatus
+      };
+    });
+    
+    // Calculate class statistics
+    const totalStudents = students.length;
+    const presentToday = todayAttendanceRecords.filter(a => a.status === 'PRESENT').length;
+    const absentToday = todayAttendanceRecords.filter(a => a.status === 'ABSENT').length;
+    const lateToday = todayAttendanceRecords.filter(a => a.status === 'LATE').length;
+    const notMarked = totalStudents - todayAttendanceRecords.length;
+    
+    // Calculate overall class average
+    const allGrades = students.flatMap(s => s.grades);
+    const classAverage = allGrades.length > 0
+      ? allGrades.reduce((sum, g) => sum + (g.percentage || g.score), 0) / allGrades.length
+      : 0;
+    
+    // Get subjects in this class
+    const classSubjects = myClass.subjects.map(s => ({
+      id: s.subject.id,
+      name: s.subject.name,
+      code: s.subject.code
+    }));
+    
+    // Identify students needing attention
+    const lowAttendanceStudents = processedStudents.filter(s => parseFloat(s.attendanceRate) < 75);
+    const lowPerformanceStudents = processedStudents.filter(s => parseFloat(s.averageScore) < 50);
+    
+    res.json({
+      success: true,
+      data: {
+        hasClass: true,
+        teacher: {
+          id: teacher.id,
+          name: teacher.user?.name,
+          email: teacher.user?.email
+        },
+        class: {
+          id: myClass.id,
+          name: myClass.name,
+          grade: myClass.grade,
+          totalStudents,
+          subjects: classSubjects,
+          classAverage: classAverage.toFixed(1),
+          stats: {
+            presentToday,
+            absentToday,
+            lateToday,
+            notMarked,
+            attendanceRate: totalStudents > 0 ? (presentToday / totalStudents) * 100 : 0
+          }
+        },
+        students: processedStudents,
+        alerts: {
+          lowAttendance: lowAttendanceStudents,
+          lowPerformance: lowPerformanceStudents,
+          totalAlerts: lowAttendanceStudents.length + lowPerformanceStudents.length
+        }
+      }
+    });
+    
   } catch (error) {
     console.error('Error fetching class teacher dashboard:', error);
     res.status(500).json({ error: error.message });

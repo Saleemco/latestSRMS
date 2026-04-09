@@ -1,190 +1,4 @@
-﻿// // dashboard.service.ts
-// import api from './api';
-
-// export const dashboardService = {
-//   getTeacherDashboard: async () => {
-//     const response = await api.get('/dashboard/teacher');
-//     return response.data.data;
-//   },
-
-//   getPrincipalDashboard: async () => {
-//     const response = await api.get('/dashboard/principal');
-//     return response.data.data;
-//   },
-
-//   getAdminDashboard: async () => {
-//     const response = await api.get('/dashboard/admin');
-//     return response.data.data;
-//   },
-
-//   getBursarDashboard: async () => {
-//     const response = await api.get('/dashboard/bursar');
-//     return response.data.data;
-//   },
-
-//   getParentDashboard: async () => {
-//     const response = await api.get('/dashboard/parent');
-//     return response.data.data;
-//   },
-
-//   getStudentDashboard: async () => {
-//     const response = await api.get('/dashboard/student');
-//     return response.data.data;
-//   },
-
-//   submitGrade: async (gradeData: any) => {
-//     const response = await api.post('/grades', gradeData);
-//     return response.data;
-//   },
-
-//   deleteGrade: async (gradeId: string) => {
-//     const response = await api.delete(`/grades/${gradeId}`);
-//     return response.data;
-//   },
-
-//   bulkDeleteGrades: async (gradeIds: string[]) => {
-//     const response = await api.post('/grades/bulk-delete', { gradeIds });
-//     return response.data;
-//   },
-
-//   submitAttendance: async (attendanceData: any) => {
-//     const response = await api.post('/attendance/bulk', attendanceData);
-//     return response.data;
-//   },
-
-//   getAttendanceByClass: async (classId: string, date: string) => {
-//     const response = await api.get(`/attendance/class/${classId}?date=${date}`);
-//     return response.data;
-//   },
-
-//   getGradesByTeacher: async (teacherId: string, termId?: string, sessionId?: string) => {
-//     const params: any = {};
-//     if (teacherId) params.teacherId = teacherId;
-//     if (termId) params.termId = termId;
-//     if (sessionId) params.sessionId = sessionId;
-//     const response = await api.get('/grades/filter', { params });
-//     return response.data;
-//   },
-
-//   getTeacherStudents: async (teacherId: string) => {
-//     const response = await api.get(`/teachers/${teacherId}/students`);
-//     return response.data;
-//   },
-
-//   getGradesByStudent: async (studentId: string, termId?: string, sessionId?: string) => {
-//     const params: any = { studentId };
-//     if (termId) params.termId = termId;
-//     if (sessionId) params.sessionId = sessionId;
-//     const response = await api.get('/grades/filter', { params });
-//     return response.data;
-//   },
-
-//   getParentChildren: async () => {
-//     const response = await api.get('/parents/children');
-//     return response.data;
-//   },
-
-//   // ==================== CLASS TEACHER METHODS ====================
-  
-//   // Get class teacher dashboard
-//   getClassTeacherDashboard: async () => {
-//     const response = await api.get('/dashboard/class-teacher');
-//     return response.data.data;
-//   },
-
-//   // Get students in class teacher's class
-//   getClassTeacherStudents: async () => {
-//     const response = await api.get('/class-teacher/students');
-//     return response.data.data;
-//   },
-
-//   // Get class teacher's attendance summary
-//   getClassTeacherAttendanceSummary: async () => {
-//     const response = await api.get('/class-teacher/attendance-summary');
-//     return response.data.data;
-//   },
-
-//   // Get available teachers for class teacher assignment
-//   getAvailableTeachers: async () => {
-//     try {
-//       console.log('📡 Fetching available teachers...');
-//       const response = await api.get('/teachers/available');
-//       console.log('✅ Available teachers response:', response.data);
-//       return response.data.data || [];
-//     } catch (error: any) {
-//       console.error('❌ Error fetching available teachers:', error);
-//       // Fallback to regular teachers endpoint if available endpoint fails
-//       try {
-//         console.log('🔄 Falling back to /teachers endpoint...');
-//         const fallbackResponse = await api.get('/teachers');
-//         const teachers = fallbackResponse.data || [];
-//         // Format teachers for the dropdown
-//         const formattedTeachers = teachers.map((teacher: any) => ({
-//           id: teacher.id,
-//           name: teacher.name,
-//           email: teacher.email,
-//           currentClass: teacher.currentClass || null
-//         }));
-//         return formattedTeachers;
-//       } catch (fallbackError) {
-//         console.error('❌ Fallback also failed:', fallbackError);
-//         return [];
-//       }
-//     }
-//   },
-
-//   // Assign class teacher
-//   assignClassTeacher: async (classId: string, teacherId: string) => {
-//     try {
-//       console.log(`📝 Assigning teacher ${teacherId} to class ${classId}`);
-//       const response = await api.put(`/classes/${classId}/assign-teacher`, { teacherId });
-//       console.log('✅ Assign response:', response.data);
-//       return response.data;
-//     } catch (error: any) {
-//       console.error('❌ Error assigning class teacher:', error);
-//       throw error;
-//     }
-//   },
-
-//   // Remove class teacher
-//   removeClassTeacher: async (classId: string) => {
-//     try {
-//       console.log(`📝 Removing class teacher from class ${classId}`);
-//       const response = await api.put(`/classes/${classId}/assign-teacher`, { teacherId: null });
-//       console.log('✅ Remove response:', response.data);
-//       return response.data;
-//     } catch (error: any) {
-//       console.error('❌ Error removing class teacher:', error);
-//       throw error;
-//     }
-//   },
-
-//   // Get class by ID
-//   getClassById: async (classId: string) => {
-//     try {
-//       const response = await api.get(`/classes/${classId}`);
-//       return response.data;
-//     } catch (error: any) {
-//       console.error('Error fetching class:', error);
-//       throw error;
-//     }
-//   },
-
-//   // Get all classes (alias for classService.getAll, kept for compatibility)
-//   getAllClasses: async () => {
-//     try {
-//       const response = await api.get('/classes');
-//       return response.data;
-//     } catch (error: any) {
-//       console.error('Error fetching classes:', error);
-//       return [];
-//     }
-//   }
-// };
-
-// export default dashboardService;
-
-import api from './api';
+﻿import api from './api';
 
 export const dashboardService = {
   getTeacherDashboard: async () => {
@@ -271,11 +85,10 @@ export const dashboardService = {
 
   // ==================== CLASS TEACHER METHODS ====================
   
-  // Get class teacher dashboard (returns class data, students, attendance, alerts)
+  // Get class teacher dashboard
   getClassTeacherDashboard: async () => {
     const response = await api.get('/dashboard/class-teacher');
-    // Return the data property which contains the dashboard data
-    return response.data.data;
+    return response.data;
   },
 
   // Get students in class teacher's class
@@ -284,7 +97,7 @@ export const dashboardService = {
     return response.data.data;
   },
 
-  // Get class teacher's attendance summary (today, weekly, monthly)
+  // Get class teacher's attendance summary
   getClassTeacherAttendanceSummary: async () => {
     const response = await api.get('/class-teacher/attendance-summary');
     return response.data.data;
@@ -339,12 +152,10 @@ export const dashboardService = {
       return response.data.data || [];
     } catch (error: any) {
       console.error('❌ Error fetching available teachers:', error);
-      // Fallback to regular teachers endpoint if available endpoint fails
       try {
         console.log('🔄 Falling back to /teachers endpoint...');
         const fallbackResponse = await api.get('/teachers');
         const teachers = fallbackResponse.data || [];
-        // Format teachers for the dropdown
         const formattedTeachers = teachers.map((teacher: any) => ({
           id: teacher.id,
           name: teacher.name,
@@ -415,7 +226,6 @@ export const dashboardService = {
     try {
       const response = await api.get('/classes');
       const classes = response.data;
-      // Transform to include class teacher info
       return classes.map((cls: any) => ({
         id: cls.id,
         name: cls.name,

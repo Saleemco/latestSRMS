@@ -201,7 +201,7 @@ export const TeacherDashboard = () => {
   ];
 
   // Check if teacher is also a class teacher
-  const isAlsoClassTeacher = classTeacherStatus?.class !== null && classTeacherStatus?.class !== undefined;
+  const isAlsoClassTeacher = classTeacherStatus?.data?.hasClass === true || classTeacherStatus?.hasClass === true;
 
   return (
     <div className="space-y-6">
@@ -591,3 +591,4 @@ export const TeacherDashboard = () => {
 };
 
 export default TeacherDashboard;
+
