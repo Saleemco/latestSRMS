@@ -2,7 +2,6 @@ FROM node:18
 
 WORKDIR /app
 
-# Copy everything
 COPY . .
 
 # ===== BACKEND =====
@@ -14,8 +13,9 @@ WORKDIR /app/frontend
 RUN npm install
 RUN npm run build
 
-# Move frontend build into backend
-RUN cp -r dist /app/backend/public
+# Ensure public folder exists
+RUN mkdir -p /app/backend/public
+RUN cp -r dist/* /app/backend/public
 
 # ===== RUN BACKEND =====
 WORKDIR /app/backend
