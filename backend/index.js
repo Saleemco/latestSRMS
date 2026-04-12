@@ -1,10 +1,12 @@
-﻿const express = require('express');
+﻿import express from "express";
+import path from "path";
+
+const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const cors = require('cors');
 const multer = require('multer');
 const XLSX = require('xlsx');
 const fs = require('fs');
-const path = require('path');
 
 const prisma = new PrismaClient();
 const app = express();
@@ -25,6 +27,10 @@ app.use((req, res, next) => {
   console.log(`📨 ${req.method} ${req.url}`);
   next();
 });
+
+
+app.use(express.static("public"));
+
 
 // ==================== HEALTH CHECK ====================
 app.get('/api/health', (req, res) => {
@@ -288,6 +294,11 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
+app.get("*", (req, res) => {
+  res.sendFile(path.resolve("public", "index.html"));
+});
+
+const PORT = process.env.PORT || 3000;
 // ==================== USER ENDPOINTS ====================
 app.get('/api/users', async (req, res) => {
   try {
@@ -517,78 +528,6 @@ app.delete('/api/classes/:id', async (req, res) => {
     res.json({ message: 'Class deleted successfully' });
   } catch (error) {
     console.error('❌ Error deleting class:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Assign class teacher to a class
-app.put('/api/classes/:classId/assign-teacher', async (req, res) => {
-  try {
-    const { classId } = req.params;
-    const { teacherId } = req.body;
-
-    console.log('👨‍🏫 Assigning class teacher:', { classId, teacherId });
-
-    if (!teacherId) {
-      return res.status(400).json({ error: 'Teacher ID is required' });
-    }
-
-    // Verify the teacher exists
-    const teacher = await prisma.teacher.findUnique({
-      where: { id: teacherId }
-    });
-
-    if (!teacher) {
-      return res.status(404).json({ error: 'Teacher not found' });
-    }
-
-    // Update the class with the class teacher
-    const updatedClass = await prisma.class.update({
-      where: { id: classId },
-      data: { classTeacherId: teacherId },
-      include: {
-        teacher: {
-          include: { user: true }
-        },
-        classTeacher: {
-          include: { user: true }
-        },
-        students: {
-          include: { user: true }
-        },
-        _count: { select: { students: true } }
-      }
-    });
-
-    // Transform the response
-    const transformedClass = {
-      id: updatedClass.id,
-      name: updatedClass.name,
-      grade: updatedClass.grade,
-      teacherId: updatedClass.teacherId,
-      teacher: updatedClass.teacher ? {
-        id: updatedClass.teacher.id,
-        name: updatedClass.teacher.user?.name,
-        email: updatedClass.teacher.user?.email
-      } : null,
-      classTeacherId: updatedClass.classTeacherId,
-      classTeacher: updatedClass.classTeacher ? {
-        id: updatedClass.classTeacher.id,
-        firstName: updatedClass.classTeacher.user?.name?.split(' ')[0] || '',
-        lastName: updatedClass.classTeacher.user?.name?.split(' ').slice(1).join(' ') || '',
-        name: updatedClass.classTeacher.user?.name,
-        email: updatedClass.classTeacher.user?.email
-      } : null,
-      _count: updatedClass._count,
-      createdAt: updatedClass.createdAt,
-      updatedAt: updatedClass.updatedAt
-    };
-
-    console.log('✅ Class teacher assigned successfully');
-    res.json(transformedClass);
-
-  } catch (error) {
-    console.error('❌ Error assigning class teacher:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -942,6 +881,68 @@ app.delete('/api/teachers/:id', async (req, res) => {
 });
 
 // ==================== CLASS TEACHER ENDPOINTS ====================
+
+// Assign class teacher
+// ==================== CLASS ENDPOINTS ====================
+app.get('/api/classes', async (req, res) => {
+  try {
+    console.log('📚 GET /api/classes - Fetching all classes');
+    const classes = await prisma.class.findMany({
+      include: {
+        teacher: {
+          include: {
+            user: true
+          }
+        },
+        classTeacher: {
+          include: {
+            user: true
+          }
+        },
+        students: {
+          include: {
+            user: true
+          }
+        },
+        _count: {
+          select: { students: true }
+        }
+      }
+    });
+    
+    // Transform the data to include class teacher information
+    const transformedClasses = classes.map(cls => ({
+      id: cls.id,
+      name: cls.name,
+      grade: cls.grade,
+      teacherId: cls.teacherId,
+      teacher: cls.teacher ? {
+        id: cls.teacher.id,
+        name: cls.teacher.user?.name,
+        email: cls.teacher.user?.email
+      } : null,
+      classTeacherId: cls.classTeacherId,
+      classTeacher: cls.classTeacher ? {
+        id: cls.classTeacher.id,
+        firstName: cls.classTeacher.user?.name?.split(' ')[0] || '',
+        lastName: cls.classTeacher.user?.name?.split(' ').slice(1).join(' ') || '',
+        name: cls.classTeacher.user?.name,
+        email: cls.classTeacher.user?.email
+      } : null,
+      _count: cls._count,
+      createdAt: cls.createdAt,
+      updatedAt: cls.updatedAt
+    }));
+    
+    console.log(`✅ Found ${transformedClasses.length} classes`);
+    console.log('📊 Classes with class teachers:', transformedClasses.filter(c => c.classTeacher).length);
+    
+    res.json(transformedClasses);
+  } catch (error) {
+    console.error('❌ Error fetching classes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Get class teacher dashboard
 // Get class teacher dashboard - Complete version
@@ -5094,18 +5095,6 @@ app.get('/api/dashboard/student', async (req, res) => {
   }
 });
 
-// ==================== STATIC FILE SERVING (FRONTEND) ====================
-// Serve frontend static files
-app.use(express.static("public"));
-
-// Handle React Router - serve index.html for all non-API routes
-app.get("*", (req, res) => {
-  // Only handle non-API routes
-  if (!req.path.startsWith('/api/')) {
-    res.sendFile(path.resolve("public", "index.html"));
-  }
-});
-
 // ==================== START SERVER ====================
 // Delete a session (only if not active and no dependencies)
 app.delete('/api/sessions/:id', async (req, res) => {
@@ -5144,6 +5133,10 @@ app.delete('/api/sessions/:id', async (req, res) => {
     console.error('Error deleting session:', error);
     res.status(500).json({ error: error.message });
   }
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
 
 const server = app.listen(port, () => {
