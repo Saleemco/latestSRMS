@@ -11,6 +11,11 @@ RUN npm install
 # ===== FRONTEND =====
 WORKDIR /app/frontend
 RUN npm install
+
+# 🔥 FIX: give permission to vite
+RUN chmod -R 755 node_modules/.bin
+
+# Now build
 RUN npm run build
 
 # Ensure public folder exists
