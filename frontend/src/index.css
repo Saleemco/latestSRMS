@@ -97,3 +97,31 @@
     page-break-after: avoid;
   }
 }
+/* Extra small screens (mobile) */
+@media (max-width: 480px) {
+  .xs\:inline {
+    display: inline !important;
+  }
+  .xs\:hidden {
+    display: none !important;
+  }
+  
+  /* Better touch targets */
+  button, 
+  .btn-primary,
+  .btn-secondary {
+    min-height: 40px;
+  }
+  
+  /* Adjust modal for mobile */
+  .fixed.inset-0.flex.items-center.justify-center {
+    padding: 0.5rem;
+  }
+}
+
+/* Small screens */
+@media (min-width: 481px) and (max-width: 640px) {
+  .sm\:text-base {
+    font-size: 1rem;
+  }
+}

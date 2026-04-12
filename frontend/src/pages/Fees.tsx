@@ -16,7 +16,9 @@ import {
   Filter,
   Calendar,
   RefreshCw,
-  X
+  X,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { feeService } from '../services/fee.service';
 import { useAuth } from '../context/AuthContext';
@@ -40,15 +42,14 @@ export default function Fees() {
   const [showFilters, setShowFilters] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [classFilter, setClassFilter] = useState<string>('');
+  const [expandedMobileRows, setExpandedMobileRows] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
 
-  // Check permissions
   const isBursar = user?.role === 'BURSAR';
   const canManageFees = isBursar;
   const canRecordPayments = isBursar;
   const canView = ['BURSAR', 'ADMIN', 'PRINCIPAL'].includes(user?.role || '');
 
-  // Fetch fees based on selected term and session
   const { 
     data: fees, 
     isLoading: feesLoading, 
@@ -64,7 +65,6 @@ export default function Fees() {
     enabled: canView,
   });
 
-  // Fetch summary for selected term/session
   const { 
     data: summary, 
     refetch: refetchSummary 
@@ -76,25 +76,32 @@ export default function Fees() {
     enabled: canView,
   });
 
-  // Fetch classes for filter
   const { data: classes } = useQuery({
     queryKey: ['classes'],
     queryFn: () => feeService.getClasses(),
     enabled: canView,
   });
 
-  // Filter fees
   const filteredFees = fees?.filter((fee: any) => {
     if (statusFilter && fee.status !== statusFilter) return false;
     if (classFilter && fee.student?.class?.id !== classFilter) return false;
     return true;
   });
 
-  // Get unique classes from fees
   const uniqueClasses = [...new Map(fees?.map((fee: any) => [fee.student?.class?.id, {
     id: fee.student?.class?.id,
     name: fee.student?.class?.name
   }]).filter(Boolean)).values()];
+
+  const toggleMobileRow = (feeId: string) => {
+    const newSet = new Set(expandedMobileRows);
+    if (newSet.has(feeId)) {
+      newSet.delete(feeId);
+    } else {
+      newSet.add(feeId);
+    }
+    setExpandedMobileRows(newSet);
+  };
 
   const handleRecordPayment = (fee: any) => {
     if (!canRecordPayments) {
@@ -145,10 +152,8 @@ export default function Fees() {
 
     try {
       await feeService.bulkDelete(selectedFees);
-      
       queryClient.invalidateQueries({ queryKey: ['fees', selectedTerm?.id, selectedSession?.id] });
       queryClient.invalidateQueries({ queryKey: ['fee-summary', selectedTerm?.id, selectedSession?.id] });
-      
       toast.success(`${selectedFees.length} fee record(s) deleted successfully`);
       setSelectedFees([]);
       setIsBulkDeleteModalOpen(false);
@@ -209,9 +214,16 @@ export default function Fees() {
     return `Student (${fee.studentId?.slice(-4) || 'Unknown'})`;
   };
 
+  const getStatusColor = (status: string) => {
+    return status === 'PAID' ? 'bg-green-100 text-green-700' :
+           status === 'PARTIALLY_PAID' ? 'bg-yellow-100 text-yellow-700' :
+           status === 'PENDING' ? 'bg-orange-100 text-orange-700' :
+           'bg-red-100 text-red-700';
+  };
+
   if (!canView) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-center">
+      <div className="flex flex-col items-center justify-center h-64 text-center p-4">
         <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
           <Eye className="w-8 h-8 text-red-600" />
         </div>
@@ -230,85 +242,73 @@ export default function Fees() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6 p-3 sm:p-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Fee Management</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Fee Management</h1>
+          <p className="text-xs sm:text-sm text-gray-500">
             {isBursar ? 'Manage student fees and payments' : 'View student fees and payments'}
             {selectedTerm && (
               <span className="ml-2 text-blue-600 font-medium">
                 - {selectedTerm.name} ({selectedTerm.academicYear || selectedTerm.session?.name})
               </span>
             )}
-            {selectedSession && !selectedTerm && (
-              <span className="ml-2 text-blue-600 font-medium">
-                - {selectedSession.name}
-              </span>
-            )}
           </p>
-          {!isBursar && (
-            <p className="text-xs text-gray-400 mt-1">
-              <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mr-1"></span>
-              View-only mode. Only Bursar can create, edit, or delete fees.
-            </p>
-          )}
         </div>
-        <div className="flex gap-3 flex-wrap">
+        <div className="flex gap-2 flex-wrap w-full sm:w-auto">
           <button
             onClick={handleRefresh}
-            className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-            title="Refresh data"
+            className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm"
           >
             <RefreshCw className="w-4 h-4" />
-            <span>Refresh</span>
+            <span className="hidden xs:inline">Refresh</span>
           </button>
           {canManageFees && selectedFees.length > 0 && (
             <button
               onClick={() => setIsBulkDeleteModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
             >
               <Trash className="w-4 h-4" />
-              <span>Delete Selected ({selectedFees.length})</span>
+              <span className="hidden xs:inline">Delete ({selectedFees.length})</span>
             </button>
           )}
           {canManageFees && (
             <>
               <button
                 onClick={() => setIsBulkModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm"
               >
                 <Users className="w-4 h-4" />
-                <span>Bulk Create by Class</span>
+                <span className="hidden xs:inline">Bulk Create</span>
               </button>
               <button
                 onClick={() => setIsCreateModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
               >
                 <Plus className="w-4 h-4" />
-                <span>Create Fee Record</span>
+                <span className="hidden xs:inline">Create Fee</span>
               </button>
             </>
           )}
         </div>
       </div>
 
-      {/* Session and Term Selection */}
-      <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
-        <div className="flex items-center gap-4 flex-wrap">
+      {/* Session and Term Selection - Mobile Optimized */}
+      <div className="bg-white rounded-xl p-3 sm:p-4 shadow-sm border border-gray-200">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-gray-500" />
-            <span className="text-sm font-medium text-gray-700">Filter by:</span>
+            <span className="text-sm font-medium text-gray-700">Filter:</span>
           </div>
           
-          {/* Session Filter */}
           <select
             value={selectedSession?.id || ''}
             onChange={(e) => {
               const session = sessions.find(s => s.id === e.target.value);
               setSelectedSession(session || null);
             }}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+            className="w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
           >
             <option value="">All Sessions</option>
             {sessions.map((session) => (
@@ -318,16 +318,13 @@ export default function Fees() {
             ))}
           </select>
 
-          {/* Term Filter - Only shows terms from selected session */}
           <select
             value={selectedTerm?.id || ''}
             onChange={(e) => {
               const term = terms.find(t => t.id === e.target.value);
-              if (term) {
-                setSelectedTerm(term);
-              }
+              if (term) setSelectedTerm(term);
             }}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+            className="w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
             disabled={!selectedSession}
           >
             <option value="">All Terms</option>
@@ -340,21 +337,20 @@ export default function Fees() {
 
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors w-full sm:w-auto justify-center"
           >
             <Filter className="w-4 h-4" />
             <span className="text-sm">Advanced Filters</span>
           </button>
         </div>
 
-        {/* Advanced Filters */}
         {showFilters && (
-          <div className="mt-4 pt-4 border-t border-gray-200">
-            <div className="flex items-center gap-4 flex-wrap">
+          <div className="mt-3 pt-3 border-t border-gray-200">
+            <div className="flex flex-col sm:flex-row gap-3">
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                className="w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-lg text-sm"
               >
                 <option value="">All Statuses</option>
                 <option value="PAID">Paid</option>
@@ -366,19 +362,17 @@ export default function Fees() {
               <select
                 value={classFilter}
                 onChange={(e) => setClassFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                className="w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-lg text-sm"
               >
                 <option value="">All Classes</option>
                 {uniqueClasses.map((cls: any) => (
-                  <option key={cls.id} value={cls.id}>
-                    {cls.name}
-                  </option>
+                  <option key={cls.id} value={cls.id}>{cls.name}</option>
                 ))}
               </select>
 
               <button
                 onClick={clearFilters}
-                className="flex items-center gap-1 px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors text-sm"
+                className="flex items-center justify-center gap-1 px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg text-sm"
               >
                 <X className="w-4 h-4" />
                 Clear Filters
@@ -388,271 +382,253 @@ export default function Fees() {
         )}
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-              <DollarSign className="w-6 h-6 text-blue-600" />
+      {/* Summary Cards - Mobile Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-6">
+        <div className="bg-white rounded-xl p-3 sm:p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <div className="w-8 h-8 sm:w-12 sm:h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+              <DollarSign className="w-4 h-4 sm:w-6 sm:h-6 text-blue-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Total Expected</p>
-              <p className="text-2xl font-bold text-gray-900">₦{summary?.totalExpected?.toLocaleString() || 0}</p>
+              <p className="text-xs sm:text-sm text-gray-500">Expected</p>
+              <p className="text-base sm:text-2xl font-bold text-gray-900">₦{summary?.totalExpected?.toLocaleString() || 0}</p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-              <Wallet className="w-6 h-6 text-green-600" />
+        <div className="bg-white rounded-xl p-3 sm:p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <div className="w-8 h-8 sm:w-12 sm:h-12 bg-green-100 rounded-xl flex items-center justify-center">
+              <Wallet className="w-4 h-4 sm:w-6 sm:h-6 text-green-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Total Collected</p>
-              <p className="text-2xl font-bold text-green-600">₦{summary?.totalCollected?.toLocaleString() || 0}</p>
+              <p className="text-xs sm:text-sm text-gray-500">Collected</p>
+              <p className="text-base sm:text-2xl font-bold text-green-600">₦{summary?.totalCollected?.toLocaleString() || 0}</p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
-              <CreditCard className="w-6 h-6 text-red-600" />
+        <div className="bg-white rounded-xl p-3 sm:p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <div className="w-8 h-8 sm:w-12 sm:h-12 bg-red-100 rounded-xl flex items-center justify-center">
+              <CreditCard className="w-4 h-4 sm:w-6 sm:h-6 text-red-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Outstanding</p>
-              <p className="text-2xl font-bold text-red-600">₦{summary?.totalOutstanding?.toLocaleString() || 0}</p>
+              <p className="text-xs sm:text-sm text-gray-500">Outstanding</p>
+              <p className="text-base sm:text-2xl font-bold text-red-600">₦{summary?.totalOutstanding?.toLocaleString() || 0}</p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-purple-600" />
+        <div className="bg-white rounded-xl p-3 sm:p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <div className="w-8 h-8 sm:w-12 sm:h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+              <TrendingUp className="w-4 h-4 sm:w-6 sm:h-6 text-purple-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Collection Rate</p>
-              <p className="text-2xl font-bold text-gray-900">{summary?.collectionRate?.toFixed(1) || 0}%</p>
+              <p className="text-xs sm:text-sm text-gray-500">Rate</p>
+              <p className="text-base sm:text-2xl font-bold text-gray-900">{summary?.collectionRate?.toFixed(1) || 0}%</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Fees Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                {canManageFees && (
-                  <th className="px-4 py-3 text-center">
-                    <button
-                      onClick={handleSelectAll}
-                      className="text-gray-500 hover:text-gray-700"
-                    >
-                      {selectedFees.length === filteredFees?.length && filteredFees?.length > 0 ? (
-                        <CheckSquare className="w-5 h-5" />
-                      ) : (
-                        <Square className="w-5 h-5" />
-                      )}
-                    </button>
-                  </th>
-                )}
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Term/Session</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Fee</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Paid</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Balance</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-               </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {filteredFees && filteredFees.length > 0 ? (
-                filteredFees.map((fee: any) => {
-                  const studentName = getStudentName(fee);
-                  const statusColor = 
-                    fee.status === 'PAID' ? 'bg-green-100 text-green-700' :
-                    fee.status === 'PARTIALLY_PAID' ? 'bg-yellow-100 text-yellow-700' :
-                    fee.status === 'PENDING' ? 'bg-orange-100 text-orange-700' :
-                    'bg-red-100 text-red-700';
+      {/* Mobile Card View */}
+      <div className="block sm:hidden space-y-3">
+        {filteredFees && filteredFees.length > 0 ? (
+          filteredFees.map((fee: any) => {
+            const isExpanded = expandedMobileRows.has(fee.id);
+            const studentName = getStudentName(fee);
+            
+            return (
+              <div key={fee.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="p-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-900">{studentName}</h3>
+                      <p className="text-xs text-gray-500">{fee.student?.admissionNo || 'N/A'} | {fee.student?.class?.name || 'No Class'}</p>
+                    </div>
+                    {canManageFees && (
+                      <button
+                        onClick={() => handleSelectFee(fee.id)}
+                        className="text-gray-500"
+                      >
+                        {selectedFees.includes(fee.id) ? (
+                          <CheckSquare className="w-5 h-5 text-blue-600" />
+                        ) : (
+                          <Square className="w-5 h-5" />
+                        )}
+                      </button>
+                    )}
+                  </div>
                   
-                  return (
-                    <tr key={fee.id} className="hover:bg-gray-50">
-                      {canManageFees && (
-                        <td className="px-4 py-4 text-center">
-                          <button
-                            onClick={() => handleSelectFee(fee.id)}
-                            className="text-gray-500 hover:text-gray-700"
-                          >
-                            {selectedFees.includes(fee.id) ? (
-                              <CheckSquare className="w-5 h-5 text-blue-600" />
-                            ) : (
-                              <Square className="w-5 h-5" />
-                            )}
-                          </button>
-                        </td>
-                      )}
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="font-medium text-gray-900">{studentName}</p>
-                          <p className="text-sm text-gray-500">
-                            {fee.student?.admissionNo || 'N/A'} | {fee.student?.class?.name || 'No Class'}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {fee.term?.name || 'N/A'} - {fee.term?.session?.name || fee.session?.name || 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 font-medium">₦{fee.totalAmount?.toLocaleString() || 0}</td>
-                      <td className="px-6 py-4 text-green-600 font-medium">₦{fee.amountPaid?.toLocaleString() || 0}</td>
-                      <td className="px-6 py-4 text-red-600 font-medium">₦{fee.balance?.toLocaleString() || 0}</td>
-                      <td className="px-6 py-4">
-                        <span className={'px-2 py-1 text-xs font-medium rounded-full ' + statusColor}>
-                          {fee.status || 'PENDING'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          {canRecordPayments && fee.status !== 'PAID' && (
-                            <button 
-                              onClick={() => handleRecordPayment(fee)}
-                              className="p-1 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                              title="Record Payment"
-                            >
-                              <Wallet className="w-4 h-4" />
-                            </button>
-                          )}
-                          <button 
-                            className="p-1 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" 
-                            title="View Details"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          {canManageFees && (
-                            <>
-                              <button 
-                                onClick={() => handleEditFee(fee)}
-                                className="p-1 text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors"
-                                title="Edit Fee"
-                              >
-                                <Edit className="w-4 h-4" />
-                              </button>
-                              <button 
-                                onClick={() => handleDeleteFee(fee.id)}
-                                className="p-1 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                title="Delete Fee"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={canManageFees ? 8 : 7} className="px-6 py-8 text-center text-gray-500">
-                    No fee records found for the selected filters.
-                    {canManageFees && ' Click "Create Fee Record" or "Bulk Create by Class" to get started.'}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Term:</span>
+                      <span className="font-medium">{fee.term?.name || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Total:</span>
+                      <span className="font-bold">₦{fee.totalAmount?.toLocaleString() || 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Paid:</span>
+                      <span className="text-green-600 font-medium">₦{fee.amountPaid?.toLocaleString() || 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Balance:</span>
+                      <span className="text-red-600 font-medium">₦{fee.balance?.toLocaleString() || 0}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-500">Status:</span>
+                      <span className={'px-2 py-1 text-xs font-medium rounded-full ' + getStatusColor(fee.status)}>
+                        {fee.status || 'PENDING'}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-end gap-2 mt-3 pt-2 border-t">
+                    {canRecordPayments && fee.status !== 'PAID' && (
+                      <button onClick={() => handleRecordPayment(fee)} className="p-1 text-green-600">
+                        <Wallet className="w-4 h-4" />
+                      </button>
+                    )}
+                    <button className="p-1 text-blue-600">
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    {canManageFees && (
+                      <>
+                        <button onClick={() => handleEditFee(fee)} className="p-1 text-yellow-600">
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => handleDeleteFee(fee.id)} className="p-1 text-red-600">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            No fee records found for the selected filters.
+          </div>
+        )}
       </div>
 
-      {/* Bulk Delete Confirmation Modal */}
+      {/* Desktop Table View */}
+      <div className="hidden sm:block bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
+        <table className="w-full min-w-[800px]">
+          <thead className="bg-gray-50">
+            <tr>
+              {canManageFees && (
+                <th className="px-4 py-3 text-center w-12">
+                  <button onClick={handleSelectAll} className="text-gray-500">
+                    {selectedFees.length === filteredFees?.length && filteredFees?.length > 0 ? (
+                      <CheckSquare className="w-5 h-5" />
+                    ) : (
+                      <Square className="w-5 h-5" />
+                    )}
+                  </button>
+                </th>
+              )}
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Term</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Paid</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Balance</th>
+              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {filteredFees && filteredFees.length > 0 ? (
+              filteredFees.map((fee: any) => {
+                const studentName = getStudentName(fee);
+                return (
+                  <tr key={fee.id} className="hover:bg-gray-50">
+                    {canManageFees && (
+                      <td className="px-4 py-4 text-center">
+                        <button onClick={() => handleSelectFee(fee.id)} className="text-gray-500">
+                          {selectedFees.includes(fee.id) ? (
+                            <CheckSquare className="w-5 h-5 text-blue-600" />
+                          ) : (
+                            <Square className="w-5 h-5" />
+                          )}
+                        </button>
+                      </td>
+                    )}
+                    <td className="px-4 py-4">
+                      <p className="font-medium text-gray-900">{studentName}</p>
+                      <p className="text-xs text-gray-500">{fee.student?.admissionNo || 'N/A'} | {fee.student?.class?.name || 'No Class'}</p>
+                    </td>
+                    <td className="px-4 py-4 text-sm text-gray-600">{fee.term?.name || 'N/A'}</td>
+                    <td className="px-4 py-4 text-right font-medium">₦{fee.totalAmount?.toLocaleString() || 0}</td>
+                    <td className="px-4 py-4 text-right text-green-600 font-medium">₦{fee.amountPaid?.toLocaleString() || 0}</td>
+                    <td className="px-4 py-4 text-right text-red-600 font-medium">₦{fee.balance?.toLocaleString() || 0}</td>
+                    <td className="px-4 py-4 text-center">
+                      <span className={'px-2 py-1 text-xs font-medium rounded-full ' + getStatusColor(fee.status)}>
+                        {fee.status || 'PENDING'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        {canRecordPayments && fee.status !== 'PAID' && (
+                          <button onClick={() => handleRecordPayment(fee)} className="p-1 text-green-600 hover:bg-green-50 rounded" title="Record Payment">
+                            <Wallet className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button className="p-1 text-blue-600 hover:bg-blue-50 rounded" title="View Details">
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        {canManageFees && (
+                          <>
+                            <button onClick={() => handleEditFee(fee)} className="p-1 text-yellow-600 hover:bg-yellow-50 rounded" title="Edit">
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => handleDeleteFee(fee.id)} className="p-1 text-red-600 hover:bg-red-50 rounded" title="Delete">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            ) : (
+              <tr>
+                <td colSpan={canManageFees ? 8 : 7} className="px-4 py-8 text-center text-gray-500">
+                  No fee records found for the selected filters.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Modals - Keep existing modal code */}
       {isBulkDeleteModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Confirm Bulk Delete</h3>
             <p className="text-gray-600 mb-6">
               Are you sure you want to delete {selectedFees.length} fee record(s)? This action cannot be undone.
             </p>
             <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setIsBulkDeleteModalOpen(false)}
-                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleBulkDelete}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-              >
-                Delete All
-              </button>
+              <button onClick={() => setIsBulkDeleteModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
+              <button onClick={handleBulkDelete} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">Delete All</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Create Fee Modal */}
-      {canManageFees && (
-        <CreateFeeModal
-          isOpen={isCreateModalOpen}
-          onClose={() => setIsCreateModalOpen(false)}
-          onSuccess={handleCreateSuccess}
-        />
-      )}
-
-      {/* Bulk Create Fee Modal */}
-      {canManageFees && (
-        <CreateBulkFeeModal
-          isOpen={isBulkModalOpen}
-          onClose={() => setIsBulkModalOpen(false)}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ['fees', selectedTerm?.id, selectedSession?.id] });
-            queryClient.invalidateQueries({ queryKey: ['fee-summary', selectedTerm?.id, selectedSession?.id] });
-            setIsBulkModalOpen(false);
-          }}
-        />
-      )}
-
-      {/* Record Payment Modal */}
-      {selectedFee && canRecordPayments && (
-        <RecordPaymentModal
-          isOpen={isPaymentModalOpen}
-          onClose={() => {
-            setIsPaymentModalOpen(false);
-            setSelectedFee(null);
-          }}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ['fees', selectedTerm?.id, selectedSession?.id] });
-            queryClient.invalidateQueries({ queryKey: ['fee-summary', selectedTerm?.id, selectedSession?.id] });
-            setIsPaymentModalOpen(false);
-            setSelectedFee(null);
-          }}
-          feeId={selectedFee.id}
-          studentName={getStudentName(selectedFee)}
-          totalAmount={selectedFee.totalAmount}
-          amountPaid={selectedFee.amountPaid}
-          balance={selectedFee.balance}
-        />
-      )}
-
-      {/* Edit Fee Modal */}
-      {selectedFee && canManageFees && (
-        <EditFeeModal
-          isOpen={isEditModalOpen}
-          onClose={() => {
-            setIsEditModalOpen(false);
-            setSelectedFee(null);
-          }}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ['fees', selectedTerm?.id, selectedSession?.id] });
-            queryClient.invalidateQueries({ queryKey: ['fee-summary', selectedTerm?.id, selectedSession?.id] });
-            setIsEditModalOpen(false);
-            setSelectedFee(null);
-          }}
-          fee={selectedFee}
-        />
-      )}
+      {canManageFees && <CreateFeeModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} onSuccess={handleCreateSuccess} />}
+      {canManageFees && <CreateBulkFeeModal isOpen={isBulkModalOpen} onClose={() => setIsBulkModalOpen(false)} onSuccess={() => { refetch(); refetchSummary(); setIsBulkModalOpen(false); }} />}
+      {selectedFee && canRecordPayments && <RecordPaymentModal isOpen={isPaymentModalOpen} onClose={() => { setIsPaymentModalOpen(false); setSelectedFee(null); }} onSuccess={() => { refetch(); refetchSummary(); setIsPaymentModalOpen(false); setSelectedFee(null); }} feeId={selectedFee.id} studentName={getStudentName(selectedFee)} totalAmount={selectedFee.totalAmount} amountPaid={selectedFee.amountPaid} balance={selectedFee.balance} />}
+      {selectedFee && canManageFees && <EditFeeModal isOpen={isEditModalOpen} onClose={() => { setIsEditModalOpen(false); setSelectedFee(null); }} onSuccess={() => { refetch(); refetchSummary(); setIsEditModalOpen(false); setSelectedFee(null); }} fee={selectedFee} />}
     </div>
   );
 }

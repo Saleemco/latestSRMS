@@ -189,3 +189,4 @@ const SidebarContent = ({ navigation }: { navigation: any[] }) => (
 );
 
 export default Sidebar;
+

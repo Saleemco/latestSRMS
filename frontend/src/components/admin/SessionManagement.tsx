@@ -1,178 +1,127 @@
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import api from '../../services/api';  // Fixed import
-import { Card } from '../ui/Card';
-import { Button } from '../ui/Button';
-import { Modal } from '../ui/Modal';
-import { Input } from '../ui/Input';
-import { Spinner } from '../ui/Spinner';
-import { Badge } from '../ui/Badge';
-import {
-  PlusIcon,
-  PencilIcon,
-  ArchiveBoxIcon,
-  ArrowPathIcon,
-  CalendarIcon,
-  AcademicCapIcon,
-} from '@heroicons/react/24/outline';
-import toast from 'react-hot-toast';
+﻿import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { sessionService } from "../../services/session.service";
+import { termService } from "../../services/term.service";
+import { Card } from "../../components/ui/Card";
+import { Badge } from "../../components/ui/Badge";
+import { Spinner } from "../../components/ui/Spinner";
+import { PlusIcon, CalendarIcon, TrashIcon, CheckCircleIcon } from "@heroicons/react/24/outline";
+import toast from "react-hot-toast";
 
-interface Session {
-  id: string;
-  name: string;
-  startDate: string;
-  endDate: string;
-  isActive: boolean;
-  isArchived: boolean;
-  terms?: any[];
-  _count?: { terms: number };
-}
-
-export const SessionManagement = () => {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingSession, setEditingSession] = useState<Session | null>(null);
-  const [copyFromSessionId, setCopyFromSessionId] = useState('');
-  const [formData, setFormData] = useState({
-    name: '',
-    startDate: '',
-    endDate: '',
-    isActive: false
-  });
+export default function SessionManagement() {
+  const [isCreating, setIsCreating] = useState(false);
+  const [newSessionName, setNewSessionName] = useState("");
+  const [newStartDate, setNewStartDate] = useState("");
+  const [newEndDate, setNewEndDate] = useState("");
+  const [sessionToDelete, setSessionToDelete] = useState<any>(null);
   const queryClient = useQueryClient();
 
   const { data: sessions, isLoading } = useQuery({
-    queryKey: ['sessions'],
-    queryFn: async () => {
-      const response = await api.get('/sessions');
-      return response.data?.data || [];
-    },
-  });
-
-  const { data: activeSession } = useQuery({
-    queryKey: ['active-session'],
-    queryFn: async () => {
-      const response = await api.get('/sessions/active');
-      return response.data?.data;
-    },
+    queryKey: ["sessions"],
+    queryFn: sessionService.getAll,
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await api.post('/sessions', data);
-      return response.data.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sessions'] });
-      queryClient.invalidateQueries({ queryKey: ['active-session'] });
-      setIsModalOpen(false);
-      resetForm();
-      toast.success('Session created successfully');
+    mutationFn: sessionService.create,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      setIsCreating(false);
+      setNewSessionName("");
+      setNewStartDate("");
+      setNewEndDate("");
+      toast.success(data.message || "Session and 3 terms created successfully!");
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Failed to create session');
-    }
+      console.error("Create error:", error);
+      const errorMsg = error.response?.data?.error || error.message || "Failed to create session";
+      toast.error(errorMsg);
+    },
   });
 
-  const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const response = await api.put(`/sessions/${id}`, data);
-      return response.data.data;
-    },
+  const deleteMutation = useMutation({
+    mutationFn: sessionService.delete,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sessions'] });
-      queryClient.invalidateQueries({ queryKey: ['active-session'] });
-      setIsModalOpen(false);
-      setEditingSession(null);
-      resetForm();
-      toast.success('Session updated successfully');
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      setSessionToDelete(null);
+      toast.success("Session deleted successfully");
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Failed to update session');
-    }
+      toast.error(error.response?.data?.error || "Failed to delete session");
+    },
   });
 
-  const archiveMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const response = await api.post(`/sessions/${id}/archive`);
-      return response.data.data;
-    },
+  const setActiveMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      sessionService.update(id, { isActive }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sessions'] });
-      queryClient.invalidateQueries({ queryKey: ['active-session'] });
-      toast.success('Session archived successfully');
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      toast.success("Session updated successfully");
+    },
+  });
+
+  const setTermActiveMutation = useMutation({
+    mutationFn: ({ termId, isActive }: { termId: string; isActive: boolean }) =>
+      termService.update(termId, { isActive }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      toast.success("Term activated successfully");
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Failed to archive session');
-    }
+      toast.error(error.response?.data?.error || "Failed to activate term");
+    },
   });
 
-  const createNextSessionMutation = useMutation({
-    mutationFn: async (currentSessionId: string) => {
-      const response = await api.post('/sessions/next', { currentSessionId });
-      return response.data.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sessions'] });
-      queryClient.invalidateQueries({ queryKey: ['active-session'] });
-      toast.success('Next session created successfully');
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Failed to create next session');
-    }
-  });
-
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      startDate: '',
-      endDate: '',
-      isActive: false
-    });
-    setCopyFromSessionId('');
-  };
-
-  const handleOpenModal = (session?: Session) => {
-    if (session) {
-      setEditingSession(session);
-      setFormData({
-        name: session.name,
-        startDate: session.startDate.split('T')[0],
-        endDate: session.endDate.split('T')[0],
-        isActive: session.isActive
-      });
-    } else {
-      setEditingSession(null);
-      resetForm();
-    }
-    setIsModalOpen(true);
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!formData.name || !formData.startDate || !formData.endDate) {
-      toast.error('Please fill in all fields');
+  const handleCreate = () => {
+    if (!newSessionName || !newStartDate || !newEndDate) {
+      toast.error("Please fill in all fields");
       return;
     }
     
-    const submitData = {
-      ...formData,
-      startDate: new Date(formData.startDate).toISOString(),
-      endDate: new Date(formData.endDate).toISOString(),
-      copyFromSessionId: copyFromSessionId || undefined
-    };
+    if (sessions?.some((s: any) => s.name === newSessionName)) {
+      toast.error(`Session "${newSessionName}" already exists!`);
+      return;
+    }
     
-    if (editingSession) {
-      updateMutation.mutate({ id: editingSession.id, data: submitData });
-    } else {
-      createMutation.mutate(submitData);
+    createMutation.mutate({
+      name: newSessionName,
+      startDate: newStartDate,
+      endDate: newEndDate,
+      isActive: false,
+      isArchived: false,
+    });
+  };
+
+  const handleDelete = (session: any) => {
+    if (session.isActive) {
+      toast.error("Cannot delete an active session. Please set another session as active first.");
+      return;
+    }
+    setSessionToDelete(session);
+  };
+
+  const confirmDelete = () => {
+    if (sessionToDelete) {
+      deleteMutation.mutate(sessionToDelete.id);
     }
   };
 
-  const handleCreateNextSession = () => {
-    if (activeSession && window.confirm(`Create next session (${parseInt(activeSession.name.split('-')[0]) + 1}-${parseInt(activeSession.name.split('-')[1]) + 1})? This will archive the current session and create a new one with the same terms.`)) {
-      createNextSessionMutation.mutate(activeSession.id);
+  const handleActivateTerm = (termId: string, termName: string, sessionName: string) => {
+    // First deactivate all other terms in this session
+    const session = sessions?.find((s: any) => 
+      s.terms?.some((t: any) => t.id === termId)
+    );
+    
+    if (session && session.terms) {
+      // Deactivate all terms in this session first
+      session.terms.forEach((term: any) => {
+        if (term.isActive && term.id !== termId) {
+          termService.update(term.id, { isActive: false }).catch(console.error);
+        }
+      });
     }
+    
+    // Then activate the selected term
+    setTermActiveMutation.mutate({ termId, isActive: true });
   };
 
   if (isLoading) {
@@ -185,221 +134,180 @@ export const SessionManagement = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Session Management</h1>
-          <p className="text-gray-600">Manage academic years/sessions</p>
+          <h1 className="text-2xl font-bold text-gray-900">Academic Sessions</h1>
+          <p className="text-gray-600">Each session automatically creates 3 terms. Click "Activate" to set a term as current.</p>
         </div>
-        <div className="flex gap-3">
-          {activeSession && (
-            <Button onClick={handleCreateNextSession} variant="secondary">
-              <ArrowPathIcon className="h-5 w-5 mr-2" />
-              Create Next Session
-            </Button>
-          )}
-          <Button onClick={() => handleOpenModal()}>
-            <PlusIcon className="h-5 w-5 mr-2" />
-            New Session
-          </Button>
-        </div>
+        <button
+          onClick={() => setIsCreating(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          <PlusIcon className="w-4 h-4" />
+          New Session
+        </button>
       </div>
 
-      {/* Active Session Card */}
-      {activeSession && (
-        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6 border border-green-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-green-600 font-medium">Active Session</p>
-              <p className="text-2xl font-bold text-green-700">{activeSession.name}</p>
-              <p className="text-sm text-green-600 mt-1">
-                {new Date(activeSession.startDate).toLocaleDateString()} - {new Date(activeSession.endDate).toLocaleDateString()}
-              </p>
-            </div>
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
-              <AcademicCapIcon className="w-8 h-8 text-green-600" />
+      {isCreating && (
+        <Card>
+          <h2 className="text-lg font-semibold mb-4">Create New Academic Session</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <input
+              type="text"
+              placeholder="Session Name (e.g., 2024-2025)"
+              value={newSessionName}
+              onChange={(e) => setNewSessionName(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
+            <input
+              type="date"
+              value={newStartDate}
+              onChange={(e) => setNewStartDate(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
+            <input
+              type="date"
+              value={newEndDate}
+              onChange={(e) => setNewEndDate(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="flex gap-3 mt-4">
+            <button
+              onClick={handleCreate}
+              disabled={createMutation.isPending}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400"
+            >
+              {createMutation.isPending ? "Creating..." : "Create Session & Terms"}
+            </button>
+            <button
+              onClick={() => setIsCreating(false)}
+              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+            >
+              Cancel
+            </button>
+          </div>
+        </Card>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {sessionToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Delete Session</h3>
+            <p className="text-gray-600 mb-4">
+              Are you sure you want to delete <strong>{sessionToDelete.name}</strong>?
+              <br />
+              <span className="text-sm text-red-500">This will also delete all terms associated with this session!</span>
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setSessionToDelete(null)}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={deleteMutation.isPending}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400"
+              >
+                {deleteMutation.isPending ? "Deleting..." : "Delete Session"}
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Sessions Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Session</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dates</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Terms</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-               </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {sessions?.map((session: Session) => (
-                <tr key={session.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    <div className="font-medium text-gray-900">{session.name}</div>
-                    {session._count?.terms > 0 && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        {session._count.terms} terms
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">
-                    {new Date(session.startDate).toLocaleDateString()} - {new Date(session.endDate).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-wrap gap-1">
-                      {session.terms?.slice(0, 3).map((term) => (
-                        <Badge key={term.id} variant="info" size="sm">
-                          {term.name}
-                        </Badge>
-                      ))}
-                      {session.terms && session.terms.length > 3 && (
-                        <Badge variant="secondary" size="sm">
-                          +{session.terms.length - 3} more
-                        </Badge>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    {session.isActive ? (
-                      <Badge variant="success">Active</Badge>
-                    ) : session.isArchived ? (
-                      <Badge variant="secondary">Archived</Badge>
-                    ) : (
-                      <Badge variant="warning">Inactive</Badge>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      {!session.isArchived && (
-                        <>
-                          <button
-                            onClick={() => handleOpenModal(session)}
-                            className="p-1 text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors"
-                            title="Edit Session"
-                          >
-                            <PencilIcon className="w-5 h-5" />
-                          </button>
-                          {!session.isActive && (
+      <div className="grid grid-cols-1 gap-6">
+        {sessions && sessions.length > 0 ? (
+          sessions.map((session: any) => (
+            <Card key={session.id} className="overflow-hidden">
+              <div className="flex flex-col md:flex-row md:items-center justify-between p-4 border-b bg-gray-50">
+                <div className="flex items-center gap-3">
+                  <CalendarIcon className="w-6 h-6 text-blue-500" />
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">{session.name}</h2>
+                    <p className="text-sm text-gray-500">
+                      {session.startDate ? new Date(session.startDate).toLocaleDateString() : 'N/A'} - {session.endDate ? new Date(session.endDate).toLocaleDateString() : 'N/A'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 mt-2 md:mt-0">
+                  {session.isActive ? (
+                    <Badge variant="success">Active Session</Badge>
+                  ) : (
+                    !session.isArchived && (
+                      <button
+                        onClick={() => setActiveMutation.mutate({ id: session.id, isActive: true })}
+                        className="px-3 py-1 text-sm bg-gray-200 rounded-lg hover:bg-gray-300"
+                      >
+                        Set Session Active
+                      </button>
+                    )
+                  )}
+                  {!session.isActive && (
+                    <button
+                      onClick={() => handleDelete(session)}
+                      className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                      title="Delete Session"
+                    >
+                      <TrashIcon className="w-5 h-5" />
+                    </button>
+                  )}
+                  {session.isArchived && <Badge variant="secondary">Archived</Badge>}
+                </div>
+              </div>
+
+              {/* Terms Section with Activation Buttons */}
+              <div className="p-4">
+                <h3 className="font-semibold text-gray-700 mb-3">Terms</h3>
+                {session.terms && session.terms.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {session.terms.map((term: any) => (
+                      <div key={term.id} className={`rounded-lg p-3 ${term.isActive ? 'bg-green-50 border border-green-200' : 'bg-gray-50'}`}>
+                        <div className="flex justify-between items-center">
+                          <span className={`font-medium ${term.isActive ? 'text-green-700' : 'text-gray-900'}`}>
+                            {term.name}
+                          </span>
+                          {term.isActive ? (
+                            <Badge variant="success">Current Term</Badge>
+                          ) : (
                             <button
-                              onClick={() => archiveMutation.mutate(session.id)}
-                              className="p-1 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
-                              title="Archive Session"
+                              onClick={() => handleActivateTerm(term.id, term.name, session.name)}
+                              disabled={setTermActiveMutation.isPending}
+                              className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
                             >
-                              <ArchiveBoxIcon className="w-5 h-5" />
+                              <CheckCircleIcon className="w-3 h-3" />
+                              Activate
                             </button>
                           )}
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {term.startDate ? new Date(term.startDate).toLocaleDateString() : 'N/A'} - {term.endDate ? new Date(term.endDate).toLocaleDateString() : 'N/A'}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-sm">No terms found. Terms are auto-created when session is created.</p>
+                )}
+              </div>
+            </Card>
+          ))
+        ) : (
+          <div className="text-center py-12 bg-gray-50 rounded-lg">
+            <CalendarIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-500">No academic sessions created yet</p>
+            <button
+              onClick={() => setIsCreating(true)}
+              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Create First Session
+            </button>
+          </div>
+        )}
       </div>
-
-      {/* Add/Edit Session Modal */}
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setEditingSession(null);
-          resetForm();
-        }}
-        title={editingSession ? 'Edit Session' : 'Create New Session'}
-      >
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
-            label="Session Name"
-            name="name"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            placeholder="e.g., 2024-2025"
-            required
-          />
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Start Date"
-              name="startDate"
-              type="date"
-              value={formData.startDate}
-              onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-              required
-            />
-            <Input
-              label="End Date"
-              name="endDate"
-              type="date"
-              value={formData.endDate}
-              onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-              required
-            />
-          </div>
-          
-          {!editingSession && sessions && sessions.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Copy Terms From
-              </label>
-              <select
-                value={copyFromSessionId}
-                onChange={(e) => setCopyFromSessionId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Don't copy terms</option>
-                {sessions.filter((s: Session) => !s.isArchived).map((session: Session) => (
-                  <option key={session.id} value={session.id}>
-                    {session.name} ({session._count?.terms || 0} terms)
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-gray-500 mt-1">
-                Copying terms will create duplicate term records for this session
-              </p>
-            </div>
-          )}
-          
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="isActive"
-              checked={formData.isActive}
-              onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-            />
-            <label htmlFor="isActive" className="text-sm text-gray-700">
-              Activate this session immediately
-            </label>
-          </div>
-          
-          <div className="flex justify-end gap-3 pt-4">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setIsModalOpen(false);
-                setEditingSession(null);
-                resetForm();
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              isLoading={createMutation.isPending || updateMutation.isPending}
-            >
-              {editingSession ? 'Update Session' : 'Create Session'}
-            </Button>
-          </div>
-        </form>
-      </Modal>
     </div>
   );
-};
-
-export default SessionManagement;
+}

@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const cors = require('cors');
 const multer = require('multer');
@@ -2887,26 +2887,26 @@ app.get('/api/sessions/active', async (req, res) => {
 app.post('/api/sessions', async (req, res) => {
   try {
     const { name, startDate, endDate, copyFromSessionId, isActive } = req.body;
-    
+
     if (!name || !startDate || !endDate) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
-    
+
     const existingSession = await prisma.session.findUnique({
       where: { name }
     });
-    
+
     if (existingSession) {
       return res.status(400).json({ error: 'Session already exists' });
     }
-    
+
     if (isActive) {
       await prisma.session.updateMany({
         where: { isActive: true },
         data: { isActive: false }
       });
     }
-    
+
     const session = await prisma.session.create({
       data: {
         name,
@@ -2915,37 +2915,56 @@ app.post('/api/sessions', async (req, res) => {
         isActive: isActive || false
       }
     });
-    
+
+    // Auto-create 3 terms for this session
+    const termNames = ['1st Term', '2nd Term', '3rd Term'];
+    const sessionStart = new Date(startDate);
+    const sessionEnd = new Date(endDate);
+    const totalDays = (sessionEnd - sessionStart) / (1000 * 60 * 60 * 24);
+    const termDays = Math.floor(totalDays / 3);
+
+    for (let i = 0; i < termNames.length; i++) {
+      const termStart = new Date(sessionStart);
+      termStart.setDate(sessionStart.getDate() + (i * termDays));
+
+      const termEnd = new Date(termStart);
+      termEnd.setDate(termStart.getDate() + termDays - 1);
+
+      // For the last term, use the session end date
+      if (i === termNames.length - 1) {
+        termEnd.setTime(sessionEnd.getTime());
+      }
+
+      await prisma.term.create({
+        data: {
+          name: termNames[i],
+          sessionId: session.id,
+          startDate: termStart,
+          endDate: termEnd,
+          isActive: (i === 0 && isActive) // First term active if session is active
+        }
+      });
+    }
+
+    // If copying from another session, also copy fees? (optional)
     if (copyFromSessionId) {
       const sourceSession = await prisma.session.findUnique({
         where: { id: copyFromSessionId },
         include: { terms: true }
       });
-      
+
       if (sourceSession && sourceSession.terms.length > 0) {
-        console.log(`📋 Copying ${sourceSession.terms.length} terms from ${sourceSession.name}`);
-        
-        for (const term of sourceSession.terms) {
-          await prisma.term.create({
-            data: {
-              name: term.name,
-              sessionId: session.id,
-              startDate: term.startDate,
-              endDate: term.endDate,
-              isActive: false
-            }
-          });
-        }
-        
-        console.log(`✅ Copied ${sourceSession.terms.length} terms to ${session.name}`);
+        console.log(`📋 Additional terms copy from ${sourceSession.name}`);
       }
     }
-    
+
+    console.log(`✅ Session created with 3 terms: ${session.name}`);
+
     res.status(201).json({ 
       data: session, 
-      message: 'Session created successfully' 
+      message: 'Session and 3 terms created successfully' 
     });
-    
+
   } catch (error) {
     console.error('Error creating session:', error);
     res.status(500).json({ error: error.message });
@@ -5065,6 +5084,45 @@ app.get('/api/dashboard/student', async (req, res) => {
 });
 
 // ==================== START SERVER ====================
+// Delete a session (only if not active and no dependencies)
+app.delete('/api/sessions/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if session exists
+    const session = await prisma.session.findUnique({
+      where: { id },
+      include: { terms: true }
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Prevent deletion of active session
+    if (session.isActive) {
+      return res.status(400).json({ error: 'Cannot delete active session. Please set another session as active first.' });
+    }
+
+    // Delete all terms first (cascade)
+    await prisma.term.deleteMany({
+      where: { sessionId: id }
+    });
+
+    // Delete the session
+    await prisma.session.delete({
+      where: { id }
+    });
+
+    console.log(`✅ Session deleted: ${session.name}`);
+    res.json({ message: 'Session deleted successfully' });
+
+  } catch (error) {
+    console.error('Error deleting session:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 const server = app.listen(port, () => {
   console.log(`\n🚀 Server running on http://localhost:${port}`);
   
