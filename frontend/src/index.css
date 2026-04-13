@@ -248,6 +248,85 @@ div, section, main, article, header, footer {
   }
 }
 
+/* ===== FIX FOR LAPTOP/DESKTOP SCROLLING BAR ===== */
+
+/* Remove horizontal scrollbar on all devices */
+html, body {
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Ensure main container doesn't cause overflow */
+#root, .min-h-screen, .bg-gray-50 {
+  overflow-x: hidden !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Fix for laptop screens (1024px and above) */
+@media (min-width: 1024px) {
+  body {
+    overflow-x: hidden !important;
+  }
+  
+  /* Remove unwanted scrollbars */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 10px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+  }
+}
+
+/* Fix for any element causing overflow */
+* {
+  max-width: 100%;
+}
+
+/* Ensure sidebar doesn't cause overflow */
+.lg\:pl-64 {
+  padding-left: 16rem;
+  overflow-x: hidden;
+}
+
+/* Fix for main content area */
+main, .flex-1, .pb-8 {
+  overflow-x: hidden;
+  width: 100%;
+}
+
+/* Ensure all containers respect width */
+.container, .mx-auto, .px-4, .px-6, .px-8 {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Fix for tables that might cause overflow */
+.overflow-x-auto {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent any unexpected overflow */
+img, video, iframe {
+  max-width: 100%;
+  height: auto;
+}
+
 /* ===== FIX FOR DROPDOWNS AND MODALS ===== */
 .z-50, .z-40, .z-30, .z-20, .z-10 {
   z-index: 9999 !important;

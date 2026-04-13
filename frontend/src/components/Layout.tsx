@@ -8,7 +8,6 @@ export const Layout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
 
-  // Close sidebar on route change on mobile
   useEffect(() => {
     if (window.innerWidth < 1024) {
       setSidebarOpen(false);
@@ -17,13 +16,13 @@ export const Layout = () => {
 
   return (
     <TermProvider>
-      <div className="min-h-screen bg-gray-50 overflow-x-hidden">
+      <div className="min-h-screen bg-gray-50 overflow-x-hidden w-full">
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-        <div className="lg:pl-64 flex flex-col flex-1">
+        <div className="lg:pl-64 flex flex-col flex-1 overflow-x-hidden w-full">
           <Header onMenuClick={() => setSidebarOpen(true)} />
-          <main className="flex-1 pb-8 overflow-x-hidden">
+          <main className="flex-1 pb-8 overflow-x-hidden w-full">
             <div className="py-4 sm:py-6">
-              <div className="mx-auto px-3 sm:px-4 md:px-6 lg:px-8">
+              <div className="mx-auto px-3 sm:px-4 md:px-6 lg:px-8 w-full overflow-x-hidden">
                 <Outlet />
               </div>
             </div>
