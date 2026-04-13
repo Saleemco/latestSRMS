@@ -42,16 +42,19 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
 
           <div className="hidden lg:block lg:h-6 lg:w-px lg:bg-gray-200" aria-hidden="true" />
 
+          {/* User Menu - Both avatar AND name trigger the dropdown */}
           <Menu as="div" className="relative">
             <Menu.Button className="-m-1.5 flex items-center p-1.5">
               <span className="sr-only">Open user menu</span>
+              {/* Avatar Circle */}
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-white">
                 <span className="text-sm font-medium">
                   {user?.firstName?.[0]}{user?.lastName?.[0] || user?.name?.[0] || 'U'}
                 </span>
               </span>
+              {/* User Name - Also clickable */}
               <span className="hidden lg:flex lg:items-center">
-                <span className="ml-4 text-sm font-semibold leading-6 text-gray-900" aria-hidden="true">
+                <span className="ml-4 text-sm font-semibold leading-6 text-gray-900">
                   {user?.firstName} {user?.lastName || user?.name?.split(' ')[0] || 'User'}
                 </span>
                 <ChevronDownIcon className="ml-2 h-5 w-5 text-gray-400" aria-hidden="true" />
