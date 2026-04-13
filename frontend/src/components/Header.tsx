@@ -1,4 +1,7 @@
-﻿import { Bars3Icon, BellIcon, ArrowRightOnRectangleIcon } from "@heroicons/react/24/outline";
+﻿import { Fragment } from "react";
+import { Menu, Transition } from "@headlessui/react";
+import { Bars3Icon, BellIcon } from "@heroicons/react/24/outline";
+import { ChevronDownIcon } from "@heroicons/react/20/solid";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { TermSelector } from "./ui/TermSelector";
@@ -16,74 +19,78 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
     navigate("/login");
   };
 
-  const getUserInitials = () => {
-    if (user?.firstName && user?.lastName) {
-      return `${user.firstName[0]}${user.lastName[0]}`;
-    }
-    if (user?.name) {
-      return user.name.split(' ').map(n => n[0]).join('').substring(0, 2);
-    }
-    return user?.email?.[0]?.toUpperCase() || 'U';
-  };
-
-  const getUserName = () => {
-    if (user?.firstName && user?.lastName) {
-      return `${user.firstName} ${user.lastName}`;
-    }
-    if (user?.name) {
-      return user.name;
-    }
-    return user?.email?.split('@')[0] || 'User';
-  };
-
   return (
-    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 shadow-sm sm:px-6 lg:px-8">
-      {/* Left side - Menu button for mobile */}
-      <div className="flex items-center gap-4">
-        <button
-          type="button"
-          className="-m-2.5 p-2.5 text-gray-700 lg:hidden"
-          onClick={onMenuClick}
-        >
-          <span className="sr-only">Open sidebar</span>
-          <Bars3Icon className="h-6 w-6" aria-hidden="true" />
-        </button>
-        
-        {/* Logo / Brand */}
-        <div className="flex-shrink-0">
-          <h1 className="text-lg font-bold text-gray-800">SchoolMS</h1>
+    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
+      <button
+        type="button"
+        className="-m-2.5 p-2.5 text-gray-700 lg:hidden"
+        onClick={onMenuClick}
+      >
+        <span className="sr-only">Open sidebar</span>
+        <Bars3Icon className="h-6 w-6" aria-hidden="true" />
+      </button>
+
+      <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
+        <div className="flex flex-1 items-center">
+          <TermSelector />
         </div>
-      </div>
+        <div className="flex items-center gap-x-4 lg:gap-x-6">
+          <button type="button" className="-m-2.5 p-2.5 text-gray-400 hover:text-gray-500">
+            <span className="sr-only">View notifications</span>
+            <BellIcon className="h-6 w-6" aria-hidden="true" />
+          </button>
 
-      {/* Center - Term Selector */}
-      <div className="flex-1 flex justify-center px-4">
-        <TermSelector />
-      </div>
+          <div className="hidden lg:block lg:h-6 lg:w-px lg:bg-gray-200" aria-hidden="true" />
 
-      {/* Right side - User info and logout */}
-      <div className="flex items-center gap-3 sm:gap-4">
-        {/* Notification Bell */}
-        <button type="button" className="relative p-2 text-gray-400 hover:text-gray-500">
-          <BellIcon className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
-          <span className="absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500"></span>
-        </button>
-
-        {/* User Info */}
-        <div className="hidden sm:flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-white">
-            <span className="text-sm font-medium">{getUserInitials()}</span>
-          </div>
-          <span className="text-sm font-medium text-gray-700">{getUserName()}</span>
+          <Menu as="div" className="relative">
+            <Menu.Button className="-m-1.5 flex items-center p-1.5">
+              <span className="sr-only">Open user menu</span>
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-white">
+                <span className="text-sm font-medium">
+                  {user?.firstName?.[0]}{user?.lastName?.[0] || user?.name?.[0] || 'U'}
+                </span>
+              </span>
+              <span className="hidden lg:flex lg:items-center">
+                <span className="ml-4 text-sm font-semibold leading-6 text-gray-900">
+                  {user?.firstName} {user?.lastName || user?.name?.split(' ')[0] || 'User'}
+                </span>
+                <ChevronDownIcon className="ml-2 h-5 w-5 text-gray-400" aria-hidden="true" />
+              </span>
+            </Menu.Button>
+            <Transition
+              as={Fragment}
+              enter="transition ease-out duration-100"
+              enterFrom="transform opacity-0 scale-95"
+              enterTo="transform opacity-100 scale-100"
+              leave="transition ease-in duration-75"
+              leaveFrom="transform opacity-100 scale-100"
+              leaveTo="transform opacity-0 scale-95"
+            >
+              <Menu.Items className="absolute right-0 z-10 mt-2.5 w-32 origin-top-right rounded-md bg-white py-2 shadow-lg ring-1 ring-gray-900/5 focus:outline-none">
+                <Menu.Item>
+                  {({ active }) => (
+                    <button
+                      onClick={() => navigate("/profile")}
+                      className={`block w-full text-left px-3 py-1 text-sm leading-6 ${active ? 'bg-gray-50' : ''} text-gray-900`}
+                    >
+                      Profile
+                    </button>
+                  )}
+                </Menu.Item>
+                <Menu.Item>
+                  {({ active }) => (
+                    <button
+                      onClick={handleLogout}
+                      className={`block w-full text-left px-3 py-1 text-sm leading-6 ${active ? 'bg-gray-50' : ''} text-gray-900`}
+                    >
+                      Logout
+                    </button>
+                  )}
+                </Menu.Item>
+              </Menu.Items>
+            </Transition>
+          </Menu>
         </div>
-
-        {/* Logout Button - Direct, no dropdown */}
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
-        >
-          <ArrowRightOnRectangleIcon className="h-5 w-5" />
-          <span className="hidden sm:inline">Logout</span>
-        </button>
       </div>
     </header>
   );
