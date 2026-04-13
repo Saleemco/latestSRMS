@@ -1,8 +1,8 @@
 ﻿import axios from "axios";
 
 // Use Vite environment variable
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
-
+// const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const API_URL = import.meta.env.VITE_API_URL || "https://latestsrms.onrender.com/api";
 console.log("🔧 API_URL:", API_URL);
 
 const api = axios.create({
