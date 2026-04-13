@@ -1,21 +1,29 @@
-﻿import { useState } from "react";
-import { Outlet } from "react-router-dom";
+﻿import { useState, useEffect } from "react";
+import { Outlet, useLocation } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { TermProvider } from "../context/TermContext";
 
 export const Layout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const location = useLocation();
+
+  // Close sidebar on route change on mobile
+  useEffect(() => {
+    if (window.innerWidth < 1024) {
+      setSidebarOpen(false);
+    }
+  }, [location.pathname]);
 
   return (
     <TermProvider>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 overflow-x-hidden">
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         <div className="lg:pl-64 flex flex-col flex-1">
           <Header onMenuClick={() => setSidebarOpen(true)} />
-          <main className="flex-1 pb-8">
-            <div className="py-6">
-              <div className="mx-auto px-4 sm:px-6 lg:px-8">
+          <main className="flex-1 pb-8 overflow-x-hidden">
+            <div className="py-4 sm:py-6">
+              <div className="mx-auto px-3 sm:px-4 md:px-6 lg:px-8">
                 <Outlet />
               </div>
             </div>
