@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+﻿import { Fragment } from "react";
 import { Menu, Transition } from "@headlessui/react";
 import { Bars3Icon, BellIcon } from "@heroicons/react/24/outline";
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
@@ -20,7 +20,7 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
   };
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-50 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
       <button
         type="button"
         className="-m-2.5 p-2.5 text-gray-700 lg:hidden"
@@ -32,7 +32,6 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
 
       <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
         <div className="flex flex-1 items-center">
-          {/* Term Selector - Placed prominently in header */}
           <TermSelector />
         </div>
         <div className="flex items-center gap-x-4 lg:gap-x-6">
@@ -48,12 +47,12 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
               <span className="sr-only">Open user menu</span>
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-white">
                 <span className="text-sm font-medium">
-                  {user?.firstName?.[0]}{user?.lastName?.[0]}
+                  {user?.firstName?.[0]}{user?.lastName?.[0] || user?.name?.[0] || 'U'}
                 </span>
               </span>
               <span className="hidden lg:flex lg:items-center">
                 <span className="ml-4 text-sm font-semibold leading-6 text-gray-900" aria-hidden="true">
-                  {user?.firstName} {user?.lastName}
+                  {user?.firstName} {user?.lastName || user?.name?.split(' ')[0] || 'User'}
                 </span>
                 <ChevronDownIcon className="ml-2 h-5 w-5 text-gray-400" aria-hidden="true" />
               </span>
@@ -67,15 +66,15 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
               leaveFrom="transform opacity-100 scale-100"
               leaveTo="transform opacity-0 scale-95"
             >
-              <Menu.Items className="absolute right-0 z-10 mt-2.5 w-32 origin-top-right rounded-md bg-white py-2 shadow-lg ring-1 ring-gray-900/5 focus:outline-none">
+              <Menu.Items className="absolute right-0 z-[100] mt-2.5 w-32 origin-top-right rounded-md bg-white py-2 shadow-lg ring-1 ring-gray-900/5 focus:outline-none">
                 <Menu.Item>
                   {({ active }) => (
-                    <a
-                      href="/profile"
-                      className={`block px-3 py-1 text-sm leading-6 ${active ? 'bg-gray-50' : ''} text-gray-900`}
+                    <button
+                      onClick={() => navigate("/profile")}
+                      className={`block w-full text-left px-3 py-1 text-sm leading-6 ${active ? 'bg-gray-50' : ''} text-gray-900`}
                     >
                       Profile
-                    </a>
+                    </button>
                   )}
                 </Menu.Item>
                 <Menu.Item>

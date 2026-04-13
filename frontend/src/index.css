@@ -247,3 +247,45 @@ div, section, main, article, header, footer {
     padding: 0.5rem !important;
   }
 }
+
+/* ===== FIX FOR DROPDOWNS AND MODALS ===== */
+.z-50, .z-40, .z-30, .z-20, .z-10 {
+  z-index: 9999 !important;
+}
+
+header .relative .absolute {
+  z-index: 10000 !important;
+}
+
+.dropdown-menu, [role="menu"] {
+  position: absolute;
+  z-index: 10000 !important;
+  background: white;
+}
+
+/* Ensure clicks pass through to dropdown items */
+button, [role="menuitem"] {
+  pointer-events: auto !important;
+}
+
+/* Ensure dropdown menus are visible */
+[role="menu"] {
+  pointer-events: auto !important;
+}
+
+/* Fix for any hidden overflow issues */
+.overflow-x-hidden {
+  overflow-x: hidden;
+  overflow-y: auto !important;
+}
+
+/* Ensure header buttons are clickable */
+header button, header a {
+  position: relative;
+  z-index: 10;
+}
+
+/* Dropdown menu should be above everything */
+.absolute.right-0.z-10 {
+  z-index: 99999 !important;
+}
