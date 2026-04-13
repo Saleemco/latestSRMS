@@ -1,5 +1,4 @@
-﻿import { Fragment, useState } from "react";
-import { Bars3Icon, BellIcon } from "@heroicons/react/24/outline";
+﻿import { Bars3Icon, BellIcon, ArrowRightOnRectangleIcon } from "@heroicons/react/24/outline";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { TermSelector } from "./ui/TermSelector";
@@ -11,7 +10,6 @@ interface HeaderProps {
 export const Header = ({ onMenuClick }: HeaderProps) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [isOpen, setIsOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -39,81 +37,54 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
   };
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:px-6 lg:px-8">
-      {/* Mobile menu button */}
-      <button
-        type="button"
-        className="-m-2.5 p-2.5 text-gray-700 lg:hidden"
-        onClick={onMenuClick}
-      >
-        <span className="sr-only">Open sidebar</span>
-        <Bars3Icon className="h-6 w-6" aria-hidden="true" />
-      </button>
-
-      {/* Term Selector */}
-      <div className="flex flex-1 items-center">
-        <TermSelector />
-      </div>
-
-      {/* Right side - Notifications and User */}
-      <div className="flex items-center gap-x-4">
-        {/* Notifications */}
-        <button type="button" className="relative p-2 text-gray-400 hover:text-gray-500">
-          <span className="sr-only">View notifications</span>
-          <BellIcon className="h-6 w-6" aria-hidden="true" />
-          <span className="absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500"></span>
+    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 shadow-sm sm:px-6 lg:px-8">
+      {/* Left side - Menu button for mobile */}
+      <div className="flex items-center gap-4">
+        <button
+          type="button"
+          className="-m-2.5 p-2.5 text-gray-700 lg:hidden"
+          onClick={onMenuClick}
+        >
+          <span className="sr-only">Open sidebar</span>
+          <Bars3Icon className="h-6 w-6" aria-hidden="true" />
         </button>
-
-        {/* User section - Name is just text, Avatar is clickable */}
-        <div className="flex items-center gap-2">
-          {/* User Name - Just text, NOT clickable, no cursor */}
-          <span className="hidden lg:block text-sm font-semibold text-gray-700">
-            {getUserName()}
-          </span>
-          
-          {/* Avatar Circle - ONLY this is clickable for dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setIsOpen(!isOpen)}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-            >
-              <span className="text-sm font-medium">{getUserInitials()}</span>
-            </button>
-
-            {/* Dropdown Menu */}
-            {isOpen && (
-              <div className="absolute right-0 z-50 mt-2 w-48 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
-                <button
-                  onClick={() => {
-                    setIsOpen(false);
-                    navigate("/profile");
-                  }}
-                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                >
-                  Your Profile
-                </button>
-                <button
-                  onClick={() => {
-                    setIsOpen(false);
-                    handleLogout();
-                  }}
-                  className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
-                >
-                  Sign out
-                </button>
-              </div>
-            )}
-          </div>
+        
+        {/* Logo / Brand */}
+        <div className="flex-shrink-0">
+          <h1 className="text-lg font-bold text-gray-800">SchoolMS</h1>
         </div>
       </div>
 
-      {/* Click outside to close dropdown */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 z-40"
-          onClick={() => setIsOpen(false)}
-        />
-      )}
+      {/* Center - Term Selector */}
+      <div className="flex-1 flex justify-center px-4">
+        <TermSelector />
+      </div>
+
+      {/* Right side - User info and logout */}
+      <div className="flex items-center gap-3 sm:gap-4">
+        {/* Notification Bell */}
+        <button type="button" className="relative p-2 text-gray-400 hover:text-gray-500">
+          <BellIcon className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
+          <span className="absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500"></span>
+        </button>
+
+        {/* User Info */}
+        <div className="hidden sm:flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-white">
+            <span className="text-sm font-medium">{getUserInitials()}</span>
+          </div>
+          <span className="text-sm font-medium text-gray-700">{getUserName()}</span>
+        </div>
+
+        {/* Logout Button - Direct, no dropdown */}
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+        >
+          <ArrowRightOnRectangleIcon className="h-5 w-5" />
+          <span className="hidden sm:inline">Logout</span>
+        </button>
+      </div>
     </header>
   );
 };
