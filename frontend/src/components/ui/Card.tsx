@@ -20,7 +20,7 @@ export const Card = ({ children, className = "", title, subtitle, action }: Card
           {action && <div>{action}</div>}
         </div>
       )}
-      <div className="p-4 sm:p-6 overflow-x-auto">{children}</div>
+      <div className="p-4 sm:p-6">{children}</div>
     </div>
   );
 };
