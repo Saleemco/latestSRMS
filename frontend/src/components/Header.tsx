@@ -43,7 +43,7 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
     <header className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-40">
       <div className="px-3 sm:px-4 lg:px-6">
         <div className="flex items-center justify-between h-14 sm:h-16">
-          {/* Left section */}
+          {/* Left section - Menu + Logo */}
           <div className="flex items-center gap-2 sm:gap-4">
             <button
               onClick={onMenuClick}
@@ -51,17 +51,26 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
             >
               <Bars3Icon className="h-5 w-5 sm:h-6 sm:w-6" />
             </button>
-            <div className="flex-shrink-0">
-              <h1 className="text-base sm:text-lg md:text-xl font-bold text-gray-800">
-                SchoolMS
-              </h1>
+            
+            {/* School Logo Placeholder */}
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 sm:h-10 sm:w-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-md">
+                <span className="text-white font-bold text-sm sm:text-base">SMS</span>
+              </div>
+              <div className="hidden sm:block">
+                <h1 className="text-base sm:text-lg md:text-xl font-bold text-gray-800">
+                  School Management System
+                </h1>
+                <p className="text-xs text-gray-500 hidden md:block">Manage • Track • Succeed</p>
+              </div>
+              <div className="sm:hidden">
+                <h1 className="text-sm font-bold text-gray-800">SMS</h1>
+              </div>
             </div>
           </div>
 
-          {/* Center - Term Selector (will be added separately) */}
-          <div className="flex-1 flex justify-center px-2 sm:px-4">
-            {/* TermSelector component will go here */}
-          </div>
+          {/* Center - Empty for spacing */}
+          <div className="flex-1"></div>
 
           {/* Right section */}
           <div className="flex items-center gap-2 sm:gap-4">
