@@ -5167,7 +5167,6 @@ app.delete('/api/users/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
 
-    // Check if user exists
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: {
@@ -5186,21 +5185,19 @@ app.delete('/api/users/:userId', async (req, res) => {
       return res.status(400).json({ error: 'Cannot delete the main admin account' });
     }
 
-    // Delete related records based on role
+    // Delete related records
     if (user.student) {
-      await prisma.student.delete({ where: { userId: user.id } });
+      await prisma.student.deleteMany({ where: { userId: user.id } });
     }
     if (user.teacher) {
-      await prisma.teacher.delete({ where: { userId: user.id } });
+      await prisma.teacher.deleteMany({ where: { userId: user.id } });
     }
     if (user.parent) {
-      await prisma.parent.delete({ where: { userId: user.id } });
+      await prisma.parent.deleteMany({ where: { userId: user.id } });
     }
 
-    // Delete the user
     await prisma.user.delete({ where: { id: userId } });
 
-    console.log(`✅ User deleted: ${user.email}`);
     res.json({ message: 'User deleted successfully' });
 
   } catch (error) {
