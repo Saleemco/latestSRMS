@@ -43,6 +43,11 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
             items.push({ name: "Teachers", href: "/teachers", icon: AcademicCapIcon });
         }
 
+        // Parents - only Admin/Principal (ADD THIS SECTION)
+        if (user?.role === "ADMIN" || user?.role === "PRINCIPAL") {
+            items.push({ name: "Parents", href: "/parents", icon: UserGroupIcon });
+        }
+
         // Classes - only Admin/Principal
         if (user?.role === "ADMIN" || user?.role === "PRINCIPAL") {
             items.push({ name: "Classes", href: "/classes", icon: AcademicCapIcon });
@@ -189,4 +194,3 @@ const SidebarContent = ({ navigation }: { navigation: any[] }) => (
 );
 
 export default Sidebar;
-

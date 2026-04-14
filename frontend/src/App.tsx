@@ -22,6 +22,7 @@ import ReportCard from "./pages/ReportCard";
 import ParentReportCard from "./pages/ParentReportCard";
 import { ClassTeacherDashboard } from "./components/dashboards/ClassTeacherDashboard";
 import ClassTeacherStudents from "./pages/ClassTeacherStudents";
+import Parents from "./pages/Parents";  // ADD THIS IMPORT
 
 const queryClient = new QueryClient();
 
@@ -58,6 +59,7 @@ function App() {
                 
                 <Route path="students" element={<Students />} />
                 <Route path="teachers" element={<Teachers />} />
+                <Route path="parents" element={<Parents />} />  {/* ADD THIS ROUTE */}
                 <Route path="classes" element={<Classes />} />
                 <Route path="subjects" element={<Subjects />} />
                 <Route path="results" element={<Results />} />
@@ -118,4 +120,3 @@ function App() {
 }
 
 export default App;
-
