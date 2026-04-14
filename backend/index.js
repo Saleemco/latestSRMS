@@ -5162,6 +5162,53 @@ app.get(/.*/, (req, res) => {
   res.sendFile(path.resolve("public", "index.html"));
 });
 
+// ==================== DELETE USER ENDPOINT ====================
+app.delete('/api/users/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Check if user exists
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        student: true,
+        teacher: true,
+        parent: true
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Prevent deleting main admin
+    if (user.email === 'admin@school.com') {
+      return res.status(400).json({ error: 'Cannot delete the main admin account' });
+    }
+
+    // Delete related records based on role
+    if (user.student) {
+      await prisma.student.delete({ where: { userId: user.id } });
+    }
+    if (user.teacher) {
+      await prisma.teacher.delete({ where: { userId: user.id } });
+    }
+    if (user.parent) {
+      await prisma.parent.delete({ where: { userId: user.id } });
+    }
+
+    // Delete the user
+    await prisma.user.delete({ where: { id: userId } });
+
+    console.log(`✅ User deleted: ${user.email}`);
+    res.json({ message: 'User deleted successfully' });
+
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== START SERVER ====================
 // Delete a session (only if not active and no dependencies)
 app.delete('/api/sessions/:id', async (req, res) => {
@@ -5222,6 +5269,8 @@ const server = app.listen(port, () => {
   console.log(`   👥 USERS`);
   console.log(`     GET    /api/users`);
   console.log(`     GET    /api/users/role/:role`);
+  console.log(`     DELETE /api/users/:userId`);
+  console.log(`     DELETE /api/users/:userId`);
   console.log(`   🏫 CLASSES`);
   console.log(`     GET    /api/classes`);
   console.log(`     GET    /api/classes/:id`);
@@ -5238,6 +5287,7 @@ const server = app.listen(port, () => {
   console.log(`     DELETE /api/teachers/:id`);
   console.log(`   👨‍🏫 CLASS TEACHER`);
   console.log(`     PUT    /api/classes/:classId/assign-teacher`);
+  console.log(`     PUT    /api/classes/:classId/assign-class-teacher`);
   console.log(`     GET    /api/dashboard/class-teacher`);
   console.log(`     GET    /api/class-teacher/students`);
   console.log(`     GET    /api/class-teacher/attendance-summary`);
