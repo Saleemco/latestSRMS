@@ -28,6 +28,7 @@ import CreateFeeModal from '../components/fees/CreateFeeModal';
 import CreateBulkFeeModal from '../components/fees/CreateBulkFeeModal';
 import EditFeeModal from '../components/fees/EditFeeModal';
 import toast from 'react-hot-toast';
+import api from '../services/api';
 
 export default function Fees() {
   const { user } = useAuth();
@@ -76,9 +77,13 @@ export default function Fees() {
     enabled: canView,
   });
 
-  const { data: classes } = useQuery({
-    queryKey: ['classes'],
-    queryFn: () => feeService.getClasses(),
+  // Fetch ALL classes directly from API - THIS IS THE FIX
+  const { data: allClasses, isLoading: classesLoading } = useQuery({
+    queryKey: ['all-classes-for-fees'],
+    queryFn: async () => {
+      const response = await api.get('/classes');
+      return response.data;
+    },
     enabled: canView,
   });
 
@@ -87,11 +92,6 @@ export default function Fees() {
     if (classFilter && fee.student?.class?.id !== classFilter) return false;
     return true;
   });
-
-  const uniqueClasses = [...new Map(fees?.map((fee: any) => [fee.student?.class?.id, {
-    id: fee.student?.class?.id,
-    name: fee.student?.class?.name
-  }]).filter(Boolean)).values()];
 
   const toggleMobileRow = (feeId: string) => {
     const newSet = new Set(expandedMobileRows);
@@ -233,7 +233,7 @@ export default function Fees() {
     );
   }
 
-  if (feesLoading) {
+  if (feesLoading || classesLoading) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -294,7 +294,7 @@ export default function Fees() {
         </div>
       </div>
 
-      {/* Session and Term Selection - Mobile Optimized */}
+      {/* Session and Term Selection */}
       <div className="bg-white rounded-xl p-3 sm:p-4 shadow-sm border border-gray-200">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <div className="flex items-center gap-2">
@@ -359,14 +359,17 @@ export default function Fees() {
                 <option value="OVERDUE">Overdue</option>
               </select>
 
+              {/* FIXED CLASS DROPDOWN - Using allClasses from API */}
               <select
                 value={classFilter}
                 onChange={(e) => setClassFilter(e.target.value)}
                 className="w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-lg text-sm"
               >
                 <option value="">All Classes</option>
-                {uniqueClasses.map((cls: any) => (
-                  <option key={cls.id} value={cls.id}>{cls.name}</option>
+                {allClasses && allClasses.map((cls: any) => (
+                  <option key={cls.id} value={cls.id}>
+                    {cls.name} ({cls._count?.students || 0} students)
+                  </option>
                 ))}
               </select>
 
@@ -382,7 +385,7 @@ export default function Fees() {
         )}
       </div>
 
-      {/* Summary Cards - Mobile Grid */}
+      {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-6">
         <div className="bg-white rounded-xl p-3 sm:p-6 shadow-sm border border-gray-100">
           <div className="flex items-center gap-2 sm:gap-4">
@@ -437,7 +440,6 @@ export default function Fees() {
       <div className="block sm:hidden space-y-3">
         {filteredFees && filteredFees.length > 0 ? (
           filteredFees.map((fee: any) => {
-            const isExpanded = expandedMobileRows.has(fee.id);
             const studentName = getStudentName(fee);
             
             return (
@@ -609,7 +611,7 @@ export default function Fees() {
         </table>
       </div>
 
-      {/* Modals - Keep existing modal code */}
+      {/* Modals */}
       {isBulkDeleteModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-6 max-w-md w-full">
