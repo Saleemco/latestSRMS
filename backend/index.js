@@ -871,7 +871,70 @@ app.delete('/api/teachers/:id', async (req, res) => {
 
 // ==================== CLASS TEACHER ENDPOINTS ====================
 
-// Assign class teacher endpoint
+// NEW: Assign class teacher endpoint (alternative URL)
+app.put('/api/classes/:classId/assign-class-teacher', async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const { teacherId } = req.body;
+
+    console.log(`📝 Assigning teacher ${teacherId} to class ${classId}`);
+
+    // Check if class exists
+    const classExists = await prisma.class.findUnique({
+      where: { id: classId }
+    });
+
+    if (!classExists) {
+      console.log('❌ Class not found:', classId);
+      return res.status(404).json({ error: 'Class not found' });
+    }
+
+    // Check if teacher exists
+    if (teacherId) {
+      const teacherExists = await prisma.teacher.findUnique({
+        where: { id: teacherId },
+        include: { user: true }
+      });
+
+      if (!teacherExists) {
+        console.log('❌ Teacher not found:', teacherId);
+        return res.status(404).json({ error: 'Teacher not found' });
+      }
+
+      console.log(`✅ Found teacher: ${teacherExists.user?.name}`);
+    }
+
+    // Update the class with the class teacher
+    const updatedClass = await prisma.class.update({
+      where: { id: classId },
+      data: {
+        classTeacherId: teacherId || null
+      },
+      include: {
+        classTeacher: {
+          include: {
+            user: true
+          }
+        }
+      }
+    });
+
+    console.log(`✅ Class teacher ${teacherId ? 'assigned' : 'removed'} successfully`);
+
+    res.json({
+      success: true,
+      data: updatedClass,
+      message: teacherId ? 'Class teacher assigned successfully' : 'Class teacher removed successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Error assigning class teacher:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Assign class teacher endpoint (existing - original URL)
+
 app.put('/api/classes/:classId/assign-teacher', async (req, res) => {
   try {
     const { classId } = req.params;
@@ -5250,8 +5313,6 @@ const server = app.listen(port, () => {
   console.log(`     GET    /api/dashboard/class-teacher (NEW - Class teacher dashboard)`);
   console.log(`     GET    /api/dashboard/parent`);
   console.log(`     GET    /api/dashboard/student`);
-  console.log(`   ❤️ HEALTH`);
-  console.log(`     GET    /api/health`);
   console.log(`   ❤️ HEALTH`);
   console.log(`     GET    /api/health`);
 });
