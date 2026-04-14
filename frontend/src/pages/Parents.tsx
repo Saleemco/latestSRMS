@@ -8,7 +8,7 @@ import { TrashIcon } from "@heroicons/react/24/outline";
 import toast from "react-hot-toast";
 import api from "../services/api";
 
-export const Parents = () => {
+const Parents = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [parentToDelete, setParentToDelete] = useState<any>(null);
   const queryClient = useQueryClient();
@@ -28,7 +28,6 @@ export const Parents = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["parents"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
       setParentToDelete(null);
       toast.success("Parent deleted successfully!");
     },
@@ -77,14 +76,21 @@ export const Parents = () => {
             <h2 className="text-xl font-bold text-gray-900 mb-4">Confirm Delete</h2>
             <p className="text-gray-600 mb-6">
               Are you sure you want to delete <strong>{parentToDelete.user?.name}</strong>?
-              <br />
-              <span className="text-sm text-red-500">This will also unlink all associated students.</span>
             </p>
             <div className="flex gap-3">
-              <button onClick={confirmDelete} disabled={deleteParentMutation.isPending} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg">
+              <button
+                onClick={confirmDelete}
+                disabled={deleteParentMutation.isPending}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
                 {deleteParentMutation.isPending ? "Deleting..." : "Delete Parent"}
               </button>
-              <button onClick={() => setParentToDelete(null)} className="flex-1 px-4 py-2 bg-gray-200 rounded-lg">Cancel</button>
+              <button
+                onClick={() => setParentToDelete(null)}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
@@ -113,25 +119,28 @@ export const Parents = () => {
                       <td className="px-4 py-3 font-medium">{parent.user?.name}</td>
                       <td className="px-4 py-3 text-sm">{parent.user?.email}</td>
                       <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-1">
-                          {parent.students && parent.students.length > 0 ? (
-                            parent.students.map((student: any) => (
+                        {parent.students && parent.students.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {parent.students.map((student: any) => (
                               <Badge key={student.id} variant="info" className="text-xs">
                                 {student.user?.name || student.name}
                               </Badge>
-                            ))
-                          ) : (
-                            <span className="text-xs text-gray-400">No children</span>
-                          )}
-                        </div>
-                       </td>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400">No children</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-center">
-                        <button onClick={() => handleDelete(parent)} className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded" title="Delete Parent">
+                        <button
+                          onClick={() => handleDelete(parent)}
+                          className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                          title="Delete Parent"
+                        >
                           <TrashIcon className="w-5 h-5" />
                         </button>
-                       </td>
-                     </td>
-                    
+                      </td>
+                    </tr>
                   ))
                 ) : (
                   <tr>
@@ -144,7 +153,9 @@ export const Parents = () => {
             </table>
           </div>
           
-          <div className="text-sm text-gray-500">Total Parents: {filteredParents.length}</div>
+          <div className="text-sm text-gray-500">
+            Total Parents: {filteredParents.length}
+          </div>
         </div>
       </Card>
     </div>
