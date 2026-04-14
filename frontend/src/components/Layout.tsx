@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { TermProvider } from "../context/TermContext";
+import { cn } from "../../utils/cn";  // ← Fixed: go up 2 levels from components/
 
 export const Layout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -16,13 +17,19 @@ export const Layout = () => {
 
   return (
     <TermProvider>
-      <div className="min-h-screen bg-gray-50 overflow-x-hidden w-full">
+      <div className="min-h-screen bg-gray-50 w-full overflow-x-hidden">
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-        <div className="lg:pl-64 flex flex-col flex-1 overflow-x-hidden w-full">
+        
+        <div className={cn(
+          "flex flex-col min-h-screen transition-all duration-300 ease-in-out",
+          "w-full overflow-x-hidden",
+          "lg:ml-64"
+        )}>
           <Header onMenuClick={() => setSidebarOpen(true)} />
-          <main className="flex-1 pb-8 overflow-x-hidden w-full">
-            <div className="py-4 sm:py-6">
-              <div className="mx-auto px-3 sm:px-4 md:px-6 lg:px-8 w-full overflow-x-hidden">
+          
+          <main className="flex-1 w-full overflow-x-hidden">
+            <div className="px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6">
+              <div className="w-full max-w-full">
                 <Outlet />
               </div>
             </div>
