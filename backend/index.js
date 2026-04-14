@@ -5162,6 +5162,222 @@ app.get(/.*/, (req, res) => {
   res.sendFile(path.resolve("public", "index.html"));
 });
 
+// ==================== PARENT CHILD LINKING ENDPOINTS ====================
+
+// Get available students (students without parents)
+app.get('/api/parent/available-students', async (req, res) => {
+  try {
+    const { search } = req.query;
+    const where = { parentId: null };
+
+    if (search && search.trim()) {
+      where.OR = [
+        { user: { name: { contains: search, mode: 'insensitive' } } },
+        { admissionNo: { contains: search, mode: 'insensitive' } }
+      ];
+    }
+
+    const students = await prisma.student.findMany({
+      where,
+      include: {
+        user: true,
+        class: true
+      },
+      orderBy: {
+        user: { name: 'asc' }
+      }
+    });
+
+    res.json({ 
+      data: students.map(s => ({ 
+        id: s.id, 
+        name: s.user?.name, 
+        admissionNo: s.admissionNo, 
+        className: s.class?.name, 
+        classId: s.classId 
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching available students:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Link a child to a parent
+// Fix the parent-child linking endpoint
+app.post('/api/parent/link-child', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let userId = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
+    }
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { studentId } = req.body;
+
+    if (!studentId) {
+      return res.status(400).json({ error: 'Student ID is required' });
+    }
+
+    // Get the parent profile using the logged-in user's ID
+    const parent = await prisma.parent.findUnique({
+      where: { userId: userId },
+      include: { user: true }
+    });
+
+    if (!parent) {
+      return res.status(404).json({ error: 'Parent profile not found. Please register as a parent first.' });
+    }
+
+    // Check if student exists
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      include: { user: true, class: true }
+    });
+
+    if (!student) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    // Check if student already has a parent
+    if (student.parentId) {
+      return res.status(400).json({ error: 'Student already has a parent linked' });
+    }
+
+    // Link the student to the parent
+    const updatedStudent = await prisma.student.update({
+      where: { id: studentId },
+      data: { parentId: parent.id },
+      include: { user: true, class: true }
+    });
+
+    console.log(`✅ Child linked: ${student.user?.name} -> Parent: ${parent.user?.name}`);
+
+    res.json({
+      success: true,
+      message: 'Child linked successfully',
+      data: {
+        id: updatedStudent.id,
+        name: updatedStudent.user?.name,
+        admissionNo: updatedStudent.admissionNo,
+        className: updatedStudent.class?.name
+      }
+    });
+
+  } catch (error) {
+    console.error('Error linking child:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Unlink a child from a parent
+app.delete('/api/parent/unlink-child/:studentId', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let userId = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
+    }
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { studentId } = req.params;
+
+    const parent = await prisma.parent.findUnique({
+      where: { userId: userId }
+    });
+
+    if (!parent) {
+      return res.status(404).json({ error: 'Parent profile not found' });
+    }
+
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      include: { user: true }
+    });
+
+    if (!student) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    if (student.parentId !== parent.id) {
+      return res.status(400).json({ error: 'Student not linked to your account' });
+    }
+
+    await prisma.student.update({
+      where: { id: studentId },
+      data: { parentId: null }
+    });
+
+    console.log(`✅ Child unlinked: ${student.user?.name}`);
+
+    res.json({ message: 'Child unlinked successfully' });
+
+  } catch (error) {
+    console.error('Error unlinking child:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get parent's children
+app.get('/api/parents/children', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let userId = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
+    }
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const parent = await prisma.parent.findUnique({
+      where: { userId: userId },
+      include: {
+        students: {
+          include: {
+            user: true,
+            class: true
+          }
+        }
+      }
+    });
+
+    if (!parent) {
+      return res.json({ data: [] });
+    }
+
+    const children = parent.students.map(student => ({
+      id: student.id,
+      name: student.user?.name,
+      admissionNo: student.admissionNo,
+      className: student.class?.name
+    }));
+
+    res.json({ data: children });
+
+  } catch (error) {
+    console.error('Error fetching parent children:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== DELETE USER ENDPOINT ====================
 app.delete('/api/users/:userId', async (req, res) => {
   try {
@@ -5308,6 +5524,10 @@ const server = app.listen(port, () => {
   console.log(`     GET    /api/parents`);
   console.log(`     POST   /api/parents`);
   console.log(`     GET    /api/parents/children`);
+  console.log(`   🔗 PARENT CHILD LINKING`);
+  console.log(`     GET    /api/parent/available-students`);
+  console.log(`     POST   /api/parent/link-child`);
+  console.log(`     DELETE /api/parent/unlink-child/:studentId`);
   console.log(`   🔗 PARENT CHILD LINKING`);
   console.log(`     GET    /api/parent/available-students`);
   console.log(`     POST   /api/parent/link-child`);
