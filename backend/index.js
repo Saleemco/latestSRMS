@@ -5647,32 +5647,6 @@ app.delete('/api/sessions/:id', async (req, res) => {
   }
 });
 
-    }
-
-    // Check if parent profile already exists
-    const existingParent = await prisma.parent.findUnique({
-      where: { userId: userId }
-    });
-
-    if (existingParent) {
-      return res.json({ message: 'Parent profile already exists', parent: existingParent });
-    }
-
-    // Create parent profile
-    const parent = await prisma.parent.create({
-      data: { userId: userId },
-      include: { user: true }
-    });
-
-    console.log(`✅ Created parent profile for user: ${parent.user?.name}`);
-    res.json({ success: true, message: 'Parent profile created', parent });
-
-  } catch (error) {
-    console.error('Error creating parent profile:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // ==================== CREATE PARENT PROFILE ====================
 app.post('/api/parents/create-profile', async (req, res) => {
   try {
