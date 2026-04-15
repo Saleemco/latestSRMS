@@ -5534,6 +5534,35 @@ app.get('/api/parents/children', async (req, res) => {
   }
 });
 
+// Get parent by user ID
+app.get('/api/parents/user/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const parent = await prisma.parent.findUnique({
+      where: { userId: userId },
+      include: {
+        user: true,
+        students: {
+          include: {
+            user: true,
+            class: true
+          }
+        }
+      }
+    });
+
+    if (!parent) {
+      return res.status(404).json({ error: 'Parent not found' });
+    }
+
+    res.json(parent);
+  } catch (error) {
+    console.error('Error fetching parent by user ID:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== DELETE USER ENDPOINT ====================
 app.delete('/api/users/:userId', async (req, res) => {
   try {
