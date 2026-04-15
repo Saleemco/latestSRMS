@@ -1959,7 +1959,164 @@ app.get('/api/students/import-template', (req, res) => {
   }
 });
 
+// ==================== FIXED SUBJECT ENDPOINTS ====================
+
+// Get all subjects with proper relations
+app.get('/api/subjects', async (req, res) => {
+  try {
+    const subjects = await prisma.subject.findMany({
+      include: {
+        teacher: {
+          include: { user: true }
+        },
+        classes: {
+          include: {
+            class: true
+          }
+        }
+      }
+    });
+
+    const transformedSubjects = subjects.map(subject => ({
+      id: subject.id,
+      name: subject.name,
+      code: subject.code,
+      teacherId: subject.teacherId,
+      teacher: subject.teacher ? {
+        id: subject.teacher.id,
+        name: subject.teacher.user?.name,
+        email: subject.teacher.user?.email
+      } : null,
+      classes: subject.classes.map(sc => ({
+        id: sc.class.id,
+        name: sc.class.name
+      }))
+    }));
+
+    res.json(transformedSubjects);
+  } catch (error) {
+    console.error('Error fetching subjects:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get subjects for a specific class
+app.get('/api/classes/:classId/subjects', async (req, res) => {
+  try {
+    const { classId } = req.params;
+
+    const classWithSubjects = await prisma.class.findUnique({
+      where: { id: classId },
+      include: {
+        subjects: {
+          include: {
+            subject: {
+              include: {
+                teacher: {
+                  include: { user: true }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!classWithSubjects) {
+      return res.status(404).json({ error: 'Class not found' });
+    }
+
+    const subjects = classWithSubjects.subjects.map(sc => ({
+      id: sc.subject.id,
+      name: sc.subject.name,
+      code: sc.subject.code,
+      teacher: sc.subject.teacher?.user?.name
+    }));
+
+    res.json(subjects);
+  } catch (error) {
+    console.error('Error fetching class subjects:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get students for grade entry (with proper filtering)
+app.get('/api/students/for-grades', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let userId = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
+    }
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { classId, subjectId, termId } = req.query;
+
+    // Get teacher's classes
+    const teacher = await prisma.teacher.findFirst({
+      where: { userId },
+      include: { classes: true }
+    });
+
+    if (!teacher) {
+      return res.status(404).json({ error: 'Teacher not found' });
+    }
+
+    const teacherClassIds = teacher.classes.map(c => c.id);
+
+    // Build where clause
+    const where = {};
+
+    if (classId) {
+      where.classId = classId;
+    } else if (teacherClassIds.length > 0) {
+      where.classId = { in: teacherClassIds };
+    }
+
+    const students = await prisma.student.findMany({
+      where,
+      include: {
+        user: true,
+        class: true,
+        grades: {
+          where: subjectId ? { subjectId } : {},
+          include: { subject: true }
+        }
+      },
+      orderBy: {
+        user: { name: 'asc' }
+      }
+    });
+
+    const formattedStudents = students.map(student => ({
+      id: student.id,
+      name: student.user?.name,
+      admissionNo: student.admissionNo,
+      className: student.class?.name,
+      classId: student.classId,
+      existingGrades: student.grades.map(g => ({
+        id: g.id,
+        score: g.score,
+        type: g.type,
+        subjectId: g.subjectId
+      }))
+    }));
+
+    res.json(formattedStudents);
+  } catch (error) {
+    console.error('Error fetching students for grades:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== SUBJECT ENDPOINTS ====================
+
 app.get('/api/subjects', async (req, res) => {
   try {
     const subjects = await prisma.subject.findMany({
@@ -5204,9 +5361,11 @@ app.get('/api/parent/available-students', async (req, res) => {
 });
 
 // Link a child to a parent
-// Fix the parent-child linking endpoint
+// Parent-Child Linking - FIXED VERSION
 app.post('/api/parent/link-child', async (req, res) => {
   try {
+    console.log('🔗 LINK CHILD ENDPOINT HIT');
+
     const authHeader = req.headers.authorization;
     let userId = null;
 
@@ -5226,17 +5385,17 @@ app.post('/api/parent/link-child', async (req, res) => {
       return res.status(400).json({ error: 'Student ID is required' });
     }
 
-    // Get the parent profile using the logged-in user's ID
+    // Find parent profile
     const parent = await prisma.parent.findUnique({
       where: { userId: userId },
       include: { user: true }
     });
 
     if (!parent) {
-      return res.status(404).json({ error: 'Parent profile not found. Please register as a parent first.' });
+      return res.status(404).json({ error: 'Parent profile not found' });
     }
 
-    // Check if student exists
+    // Find student
     const student = await prisma.student.findUnique({
       where: { id: studentId },
       include: { user: true, class: true }
@@ -5246,19 +5405,16 @@ app.post('/api/parent/link-child', async (req, res) => {
       return res.status(404).json({ error: 'Student not found' });
     }
 
-    // Check if student already has a parent
     if (student.parentId) {
-      return res.status(400).json({ error: 'Student already has a parent linked' });
+      return res.status(400).json({ error: 'Student already has a parent' });
     }
 
-    // Link the student to the parent
+    // Link
     const updatedStudent = await prisma.student.update({
       where: { id: studentId },
       data: { parentId: parent.id },
       include: { user: true, class: true }
     });
-
-    console.log(`✅ Child linked: ${student.user?.name} -> Parent: ${parent.user?.name}`);
 
     res.json({
       success: true,

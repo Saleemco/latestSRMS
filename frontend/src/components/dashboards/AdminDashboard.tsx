@@ -1,4 +1,4 @@
-﻿import { useState, useMemo, useEffect } from "react";
+﻿import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../context/AuthContext";
 import { Card } from "../ui/Card";
@@ -16,6 +16,7 @@ export const AdminDashboard = () => {
   const [studentSearchTerm, setStudentSearchTerm] = useState("");
   const [parentSearchTerm, setParentSearchTerm] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<any>(null);
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -45,7 +46,7 @@ export const AdminDashboard = () => {
   });
 
   // Fetch subjects for teacher assignment
-  const { data: subjects } = useQuery({
+  const { data: subjectsList } = useQuery({
     queryKey: ["subjects"],
     queryFn: async () => {
       const response = await api.get("/subjects");
@@ -78,6 +79,29 @@ export const AdminDashboard = () => {
     },
   });
 
+  // Delete user mutation
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const response = await api.delete(`/users/${userId}`);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["all-users"] });
+      setUserToDelete(null);
+      toast.success("User deleted successfully!");
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Failed to delete user");
+    },
+  });
+
+  const getAdminName = () => {
+    if (!user) return "Admin";
+    if (user.firstName) return user.firstName;
+    if (user.name) return user.name;
+    return "Admin";
+  };
+
   // Filter by role
   const teachers = useMemo(() => {
     return (allUsers || []).filter((u: any) => u.role === "TEACHER");
@@ -92,20 +116,32 @@ export const AdminDashboard = () => {
   }, [allUsers]);
 
   // Search filters
-  const filteredTeachers = teachers.filter((teacher: any) =>
-    teacher.name?.toLowerCase().includes(teacherSearchTerm.toLowerCase()) ||
-    teacher.email?.toLowerCase().includes(teacherSearchTerm.toLowerCase())
-  );
+  const filteredTeachers = useMemo(() => {
+    if (!teacherSearchTerm) return teachers;
+    const term = teacherSearchTerm.toLowerCase();
+    return teachers.filter((teacher: any) =>
+      teacher.name?.toLowerCase().includes(term) ||
+      teacher.email?.toLowerCase().includes(term)
+    );
+  }, [teachers, teacherSearchTerm]);
 
-  const filteredStudents = students.filter((student: any) =>
-    student.name?.toLowerCase().includes(studentSearchTerm.toLowerCase()) ||
-    student.email?.toLowerCase().includes(studentSearchTerm.toLowerCase())
-  );
+  const filteredStudents = useMemo(() => {
+    if (!studentSearchTerm) return students;
+    const term = studentSearchTerm.toLowerCase();
+    return students.filter((student: any) =>
+      student.name?.toLowerCase().includes(term) ||
+      student.email?.toLowerCase().includes(term)
+    );
+  }, [students, studentSearchTerm]);
 
-  const filteredParents = parents.filter((parent: any) =>
-    parent.name?.toLowerCase().includes(parentSearchTerm.toLowerCase()) ||
-    parent.email?.toLowerCase().includes(parentSearchTerm.toLowerCase())
-  );
+  const filteredParents = useMemo(() => {
+    if (!parentSearchTerm) return parents;
+    const term = parentSearchTerm.toLowerCase();
+    return parents.filter((parent: any) =>
+      parent.name?.toLowerCase().includes(term) ||
+      parent.email?.toLowerCase().includes(term)
+    );
+  }, [parents, parentSearchTerm]);
 
   const handleCreateUser = () => {
     if (!formData.firstName || !formData.lastName || !formData.email || !formData.password) {
@@ -121,13 +157,26 @@ export const AdminDashboard = () => {
       role: formData.role,
     };
 
-    // Add classIds and subjectIds only for TEACHER role
     if (formData.role === "TEACHER") {
       userData.classIds = formData.classIds;
       userData.subjectIds = formData.subjectIds;
     }
 
     createUserMutation.mutate(userData);
+  };
+
+  const handleDeleteClick = (userToDelete: any) => {
+    if (userToDelete.email === "admin@school.com") {
+      toast.error("Cannot delete the main Admin account");
+      return;
+    }
+    setUserToDelete(userToDelete);
+  };
+
+  const confirmDelete = () => {
+    if (userToDelete) {
+      deleteUserMutation.mutate(userToDelete.id);
+    }
   };
 
   const handleClassToggle = (classId: string) => {
@@ -168,10 +217,10 @@ export const AdminDashboard = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-          <p className="text-gray-600">Welcome back, {user?.name || 'Admin'}!</p>
+          <p className="text-gray-600">Welcome back, {getAdminName()}!</p>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
@@ -254,18 +303,15 @@ export const AdminDashboard = () => {
                       </label>
                     ))}
                   </div>
-                  {formData.classIds.length > 0 && (
-                    <p className="text-xs text-gray-500 mt-1">Selected: {formData.classIds.length} classes</p>
-                  )}
                 </div>
               )}
 
               {/* Subjects Selection - Only for Teachers */}
-              {formData.role === "TEACHER" && subjects && subjects.length > 0 && (
+              {formData.role === "TEACHER" && subjectsList && subjectsList.length > 0 && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Assign Subjects</label>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2 border rounded-lg p-3 max-h-40 overflow-y-auto">
-                    {subjects.map((subject: any) => (
+                    {subjectsList.map((subject: any) => (
                       <label key={subject.id} className="flex items-center gap-2 text-sm">
                         <input
                           type="checkbox"
@@ -277,9 +323,6 @@ export const AdminDashboard = () => {
                       </label>
                     ))}
                   </div>
-                  {formData.subjectIds.length > 0 && (
-                    <p className="text-xs text-gray-500 mt-1">Selected: {formData.subjectIds.length} subjects</p>
-                  )}
                 </div>
               )}
 
@@ -298,6 +341,33 @@ export const AdminDashboard = () => {
                   Cancel
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {userToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Confirm Delete</h2>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete <strong>{userToDelete.name}</strong>?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={confirmDelete}
+                disabled={deleteUserMutation.isPending}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleteUserMutation.isPending ? "Deleting..." : "Delete User"}
+              </button>
+              <button
+                onClick={() => setUserToDelete(null)}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
@@ -349,14 +419,23 @@ export const AdminDashboard = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto">
             {filteredTeachers.length > 0 ? (
               filteredTeachers.map((teacher: any) => (
-                <div key={teacher.id} className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100">
-                  <p className="font-medium text-gray-900">{teacher.name}</p>
-                  <p className="text-sm text-gray-500">{teacher.email}</p>
+                <div key={teacher.id} className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 flex justify-between items-center">
+                  <div>
+                    <p className="font-medium text-gray-900">{teacher.name}</p>
+                    <p className="text-sm text-gray-500">{teacher.email}</p>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteClick(teacher)}
+                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                    title="Delete Teacher"
+                  >
+                    <TrashIcon className="w-5 h-5" />
+                  </button>
                 </div>
               ))
             ) : (
               <p className="text-gray-500 text-center py-4 col-span-3">
-                {teacherSearchTerm ? "No teachers found matching your search" : "No teachers in the system"}
+                {teacherSearchTerm ? "No teachers found" : "No teachers in the system"}
               </p>
             )}
           </div>
@@ -370,14 +449,23 @@ export const AdminDashboard = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto">
             {filteredStudents.length > 0 ? (
               filteredStudents.map((student: any) => (
-                <div key={student.id} className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100">
-                  <p className="font-medium text-gray-900">{student.name}</p>
-                  <p className="text-sm text-gray-500">{student.email}</p>
+                <div key={student.id} className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 flex justify-between items-center">
+                  <div>
+                    <p className="font-medium text-gray-900">{student.name}</p>
+                    <p className="text-sm text-gray-500">{student.email}</p>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteClick(student)}
+                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                    title="Delete Student"
+                  >
+                    <TrashIcon className="w-5 h-5" />
+                  </button>
                 </div>
               ))
             ) : (
               <p className="text-gray-500 text-center py-4 col-span-3">
-                {studentSearchTerm ? "No students found matching your search" : "No students in the system"}
+                {studentSearchTerm ? "No students found" : "No students in the system"}
               </p>
             )}
           </div>
@@ -391,14 +479,23 @@ export const AdminDashboard = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto">
             {filteredParents.length > 0 ? (
               filteredParents.map((parent: any) => (
-                <div key={parent.id} className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100">
-                  <p className="font-medium text-gray-900">{parent.name}</p>
-                  <p className="text-sm text-gray-500">{parent.email}</p>
+                <div key={parent.id} className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 flex justify-between items-center">
+                  <div>
+                    <p className="font-medium text-gray-900">{parent.name}</p>
+                    <p className="text-sm text-gray-500">{parent.email}</p>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteClick(parent)}
+                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                    title="Delete Parent"
+                  >
+                    <TrashIcon className="w-5 h-5" />
+                  </button>
                 </div>
               ))
             ) : (
               <p className="text-gray-500 text-center py-4 col-span-3">
-                {parentSearchTerm ? "No parents found matching your search" : "No parents in the system"}
+                {parentSearchTerm ? "No parents found" : "No parents in the system"}
               </p>
             )}
           </div>
