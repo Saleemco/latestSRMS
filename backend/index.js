@@ -5647,20 +5647,6 @@ app.delete('/api/sessions/:id', async (req, res) => {
   }
 });
 
-// Create parent profile for logged-in user
-app.post('/api/parents/create-profile', async (req, res) => {
-  try {
-    const authHeader = req.headers.authorization;
-    let userId = null;
-
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.split(' ')[1];
-      const decoded = Buffer.from(token, 'base64').toString();
-      userId = decoded.split(':')[0];
-    }
-
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
     }
 
     // Check if parent profile already exists
@@ -5683,6 +5669,89 @@ app.post('/api/parents/create-profile', async (req, res) => {
 
   } catch (error) {
     console.error('Error creating parent profile:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== CREATE PARENT PROFILE ====================
+app.post('/api/parents/create-profile', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let userId = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
+    }
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Check if parent profile already exists
+    const existingParent = await prisma.parent.findUnique({
+      where: { userId: userId },
+      include: { user: true }
+    });
+
+    if (existingParent) {
+      return res.json({ 
+        success: true, 
+        message: 'Parent profile already exists', 
+        parent: existingParent 
+      });
+    }
+
+    // Create parent profile
+    const parent = await prisma.parent.create({
+      data: { userId: userId },
+      include: { user: true }
+    });
+
+    console.log(`✅ Created parent profile for: ${parent.user?.name} (${parent.user?.email})`);
+
+    res.json({ 
+      success: true, 
+      message: 'Parent profile created successfully', 
+      parent: parent 
+    });
+
+  } catch (error) {
+    console.error('Error creating parent profile:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get current parent profile
+app.get('/api/parents/me', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let userId = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
+    }
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const parent = await prisma.parent.findUnique({
+      where: { userId: userId },
+      include: { user: true, students: { include: { user: true, class: true } } }
+    });
+
+    if (!parent) {
+      return res.status(404).json({ error: 'Parent profile not found' });
+    }
+
+    res.json(parent);
+
+  } catch (error) {
+    console.error('Error fetching parent profile:', error);
     res.status(500).json({ error: error.message });
   }
 });
