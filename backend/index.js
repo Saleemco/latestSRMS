@@ -5647,6 +5647,46 @@ app.delete('/api/sessions/:id', async (req, res) => {
   }
 });
 
+// Create parent profile for logged-in user
+app.post('/api/parents/create-profile', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let userId = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
+    }
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Check if parent profile already exists
+    const existingParent = await prisma.parent.findUnique({
+      where: { userId: userId }
+    });
+
+    if (existingParent) {
+      return res.json({ message: 'Parent profile already exists', parent: existingParent });
+    }
+
+    // Create parent profile
+    const parent = await prisma.parent.create({
+      data: { userId: userId },
+      include: { user: true }
+    });
+
+    console.log(`✅ Created parent profile for user: ${parent.user?.name}`);
+    res.json({ success: true, message: 'Parent profile created', parent });
+
+  } catch (error) {
+    console.error('Error creating parent profile:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 const server = app.listen(port, () => {
   console.log(`\n🚀 Server running on http://localhost:${port}`);
   

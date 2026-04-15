@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+﻿import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { dashboardService } from "../../services/dashboard.service";
 import { parentService } from "../../services/parent.service";
@@ -24,18 +24,54 @@ import {
   CalendarIcon,
 } from "@heroicons/react/24/outline";
 import toast from "react-hot-toast";
+import api from "../../services/api";
 
 export const ParentDashboard = () => {
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
+  const [isCreatingProfile, setIsCreatingProfile] = useState(false);
   const queryClient = useQueryClient();
 
-  // Fetch parent dashboard data
-  const { data, isLoading, error } = useQuery({
+  // Check if parent profile exists
+  const { data: parentProfile, isLoading: profileLoading, refetch: refetchProfile } = useQuery({
+    queryKey: ["parent-profile"],
+    queryFn: async () => {
+      try {
+        const response = await api.get('/parents/me');
+        return response.data;
+      } catch (error: any) {
+        if (error.response?.status === 404) {
+          return null;
+        }
+        throw error;
+      }
+    },
+  });
+
+  // Create parent profile mutation
+  const createProfileMutation = useMutation({
+    mutationFn: async () => {
+      const response = await api.post('/parents/create-profile');
+      return response.data;
+    },
+    onSuccess: () => {
+      toast.success('Parent profile activated! You can now link your children.');
+      refetchProfile();
+      setIsCreatingProfile(false);
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'Failed to activate parent account');
+      setIsCreatingProfile(false);
+    },
+  });
+
+  // Fetch parent dashboard data (only if profile exists)
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["parent-dashboard"],
     queryFn: dashboardService.getParentDashboard,
+    enabled: !!parentProfile, // Only run if parent profile exists
   });
 
   // Fetch available students for linking with search
@@ -45,7 +81,7 @@ export const ParentDashboard = () => {
   } = useQuery({
     queryKey: ["available-students", searchTerm],
     queryFn: () => parentService.getAvailableStudents(searchTerm),
-    enabled: showLinkModal,
+    enabled: showLinkModal && !!parentProfile,
   });
 
   // Link child mutation
@@ -77,6 +113,11 @@ export const ParentDashboard = () => {
     },
   });
 
+  const handleCreateProfile = () => {
+    setIsCreatingProfile(true);
+    createProfileMutation.mutate();
+  };
+
   const handleLinkChild = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedStudentId) {
@@ -98,6 +139,47 @@ export const ParentDashboard = () => {
 
   const availableStudents = availableStudentsData?.data || [];
 
+  // Show loading while checking profile
+  if (profileLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  // If parent profile doesn't exist, show activation screen
+  if (!parentProfile) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Parent Dashboard</h1>
+          <p className="text-gray-600">Activate your parent account</p>
+        </div>
+        
+        <Card>
+          <div className="text-center py-12">
+            <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <UserIcon className="w-10 h-10 text-blue-600" />
+            </div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Welcome to Parent Portal</h2>
+            <p className="text-gray-600 max-w-md mx-auto mb-6">
+              To get started, you need to activate your parent account. This will allow you to 
+              link your children and track their academic progress, fees, and attendance.
+            </p>
+            <button
+              onClick={handleCreateProfile}
+              disabled={isCreatingProfile}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
+              {isCreatingProfile ? "Activating..." : "Activate Parent Account"}
+            </button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -110,7 +192,7 @@ export const ParentDashboard = () => {
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
         <p>Error loading dashboard: {error.message}</p>
-        <button onClick={() => window.location.reload()} className="mt-2 text-red-600 underline">
+        <button onClick={() => refetch()} className="mt-2 text-red-600 underline">
           Try Again
         </button>
       </div>
