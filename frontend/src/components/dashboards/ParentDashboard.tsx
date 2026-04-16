@@ -71,31 +71,46 @@ export const ParentDashboard = () => {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["parent-dashboard"],
     queryFn: dashboardService.getParentDashboard,
-    enabled: !!parentProfile, // Only run if parent profile exists
+    enabled: !!parentProfile,
+    staleTime: 0, // Don't cache stale data
+    refetchOnMount: true, // Refetch when component mounts
+    refetchOnWindowFocus: true, // Refetch when window gets focus
   });
 
   // Fetch available students for linking with search
   const {
     data: availableStudentsData,
     isLoading: studentsLoading,
+    refetch: refetchAvailableStudents,
   } = useQuery({
     queryKey: ["available-students", searchTerm],
     queryFn: () => parentService.getAvailableStudents(searchTerm),
     enabled: showLinkModal && !!parentProfile,
   });
 
-  // Link child mutation
+  // Link child mutation - FIXED with better cache invalidation
   const linkChildMutation = useMutation({
     mutationFn: parentService.linkChild,
     onSuccess: () => {
       setShowLinkModal(false);
       setSelectedStudentId("");
       setSearchTerm("");
+      
+      // Invalidate all related queries
       queryClient.invalidateQueries({ queryKey: ["parent-dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["available-students"] });
+      queryClient.invalidateQueries({ queryKey: ["parent-profile"] });
+      
+      // Force refetch dashboard data immediately
+      setTimeout(() => {
+        refetch();
+        refetchAvailableStudents();
+      }, 100);
+      
       toast.success("Child linked successfully!");
     },
     onError: (error: any) => {
+      console.error("Link error:", error);
       toast.error(error.response?.data?.error || "Failed to link child");
     },
   });
@@ -106,6 +121,13 @@ export const ParentDashboard = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["parent-dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["available-students"] });
+      queryClient.invalidateQueries({ queryKey: ["parent-profile"] });
+      
+      // Force refetch
+      setTimeout(() => {
+        refetch();
+      }, 100);
+      
       toast.success("Child unlinked successfully");
     },
     onError: (error: any) => {
@@ -138,6 +160,15 @@ export const ParentDashboard = () => {
   };
 
   const availableStudents = availableStudentsData?.data || [];
+
+  // Debug - log when data changes
+  useEffect(() => {
+    if (data) {
+      console.log("📊 Dashboard data updated:", data);
+      console.log("👨‍🎓 Students count:", data.students?.length);
+      console.log("👨‍🎓 Students:", data.students);
+    }
+  }, [data]);
 
   // Show loading while checking profile
   if (profileLoading) {
