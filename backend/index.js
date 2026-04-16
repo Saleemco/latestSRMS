@@ -5305,21 +5305,348 @@ app.get('/api/dashboard/student', async (req, res) => {
   }
 });
 
-// ==================== STATIC FILE SERVING (FRONTEND) ====================
-// Serve frontend static files - MUST be before API routes
-app.use(express.static("public"));
 
-// Handle React Router - serve index.html for all non-API routes
-// Use a catch-all regex but check path inside handler
-app.get(/.*/, (req, res) => {
-  // Skip API routes - let them 404 if not handled above
-  if (req.path.startsWith("/api/")) {
-    return res.status(404).json({ error: "API endpoint not found" });
+// ==================== PARENT PROFILE MANAGEMENT ====================
+
+// Create parent profile for logged-in user
+app.post('/api/parents/create-profile', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let userId = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
+    }
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    console.log('🔍 Creating parent profile for user ID:', userId);
+
+    // Check if user exists
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Update user role to PARENT if not already
+    if (user.role !== 'PARENT') {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { role: 'PARENT' }
+      });
+      console.log('✅ Updated user role to PARENT');
+    }
+
+    // Check if parent profile already exists
+    const existingParent = await prisma.parent.findUnique({
+      where: { userId: userId },
+      include: { user: true }
+    });
+
+    if (existingParent) {
+      console.log('✅ Parent profile already exists');
+      return res.json({ 
+        success: true, 
+        message: 'Parent profile already exists', 
+        parent: existingParent 
+      });
+    }
+
+    // Create parent profile
+    const parent = await prisma.parent.create({
+      data: { userId: userId },
+      include: { user: true }
+    });
+
+    console.log(`✅ Created parent profile for: ${parent.user?.name} (${parent.user?.email})`);
+
+    res.json({ 
+      success: true, 
+      message: 'Parent profile created successfully', 
+      parent: parent 
+    });
+
+  } catch (error) {
+    console.error('Error creating parent profile:', error);
+    res.status(500).json({ error: error.message });
   }
-  res.sendFile(path.resolve("public", "index.html"));
 });
 
-// ==================== PARENT CHILD LINKING ENDPOINTS ====================
+// Get current parent profile
+app.get('/api/parents/me', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let userId = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
+    }
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    console.log('🔍 Fetching parent profile for user ID:', userId);
+
+    // First check if user exists
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Check if user has parent role
+    if (user.role !== 'PARENT') {
+      return res.status(403).json({ error: 'User is not a parent' });
+    }
+
+    // Find parent profile
+    const parent = await prisma.parent.findUnique({
+      where: { userId: userId },
+      include: { 
+        user: true, 
+        students: { 
+          include: { 
+            user: true, 
+            class: true 
+          } 
+        } 
+      }
+    });
+
+    if (!parent) {
+      console.log('❌ Parent profile not found for user ID:', userId);
+      return res.status(404).json({ 
+        error: 'Parent profile not found',
+        message: 'Please create a parent profile first'
+      });
+    }
+
+    console.log('✅ Parent profile found:', parent.user?.name);
+    res.json(parent);
+
+  } catch (error) {
+    console.error('Error fetching parent profile:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get parent by user ID
+app.get('/api/parents/user/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const parent = await prisma.parent.findUnique({
+      where: { userId: userId },
+      include: {
+        user: true,
+        students: {
+          include: {
+            user: true,
+            class: true
+          }
+        }
+      }
+    });
+
+    if (!parent) {
+      return res.status(404).json({ error: 'Parent not found' });
+    }
+
+    res.json(parent);
+  } catch (error) {
+    console.error('Error fetching parent by user ID:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get parent dashboard data
+app.get('/api/dashboard/parent', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let userId = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
+    }
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const parent = await prisma.parent.findUnique({
+      where: { userId: userId },
+      include: {
+        user: true,
+        students: {
+          include: {
+            user: true,
+            class: true,
+            fees: {
+              include: {
+                payments: true,
+                term: {
+                  include: {
+                    session: true
+                  }
+                },
+                feeItems: true
+              },
+              orderBy: { createdAt: 'desc' }
+            },
+            attendances: {
+              take: 5,
+              orderBy: { date: 'desc' }
+            },
+            grades: {
+              include: {
+                subject: true
+              },
+              take: 10,
+              orderBy: { createdAt: 'desc' }
+            }
+          }
+        }
+      }
+    });
+
+    if (!parent) {
+      return res.status(404).json({ error: 'Parent not found' });
+    }
+
+    let totalOutstanding = 0;
+    let totalExpected = 0;
+    let totalPaid = 0;
+
+    const transformedStudents = parent.students.map(student => {
+      let studentTotalFees = 0;
+      let studentTotalPaid = 0;
+      let studentTotalOutstanding = 0;
+
+      student.fees.forEach(fee => {
+        studentTotalFees += fee.totalAmount;
+        studentTotalPaid += fee.paidAmount;
+        studentTotalOutstanding += fee.balance;
+      });
+
+      totalExpected += studentTotalFees;
+      totalPaid += studentTotalPaid;
+      totalOutstanding += studentTotalOutstanding;
+
+      const recentPayments = student.fees.flatMap(fee => 
+        fee.payments.map(payment => ({
+          id: payment.id,
+          amount: payment.amount,
+          date: payment.paymentDate,
+          method: payment.paymentMethod,
+          term: fee.term?.name,
+          session: fee.term?.session?.name
+        }))
+      ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
+
+      return {
+        id: student.id,
+        name: student.user?.name || 'Unknown',
+        admissionNo: student.admissionNo || 'N/A',
+        className: student.class?.name || 'No Class',
+        feeSummary: {
+          totalFees: studentTotalFees,
+          totalPaid: studentTotalPaid,
+          totalOutstanding: studentTotalOutstanding,
+          paymentProgress: studentTotalFees > 0 ? (studentTotalPaid / studentTotalFees) * 100 : 0
+        },
+        recentPayments,
+        recentAttendance: student.attendances.map(a => ({
+          date: a.date,
+          status: a.status
+        })),
+        recentGrades: student.grades.map(g => ({
+          id: g.id,
+          subjectName: g.subject?.name,
+          score: g.score,
+          type: g.type,
+          createdAt: g.createdAt
+        }))
+      };
+    });
+
+    res.json({
+      data: {
+        parent: {
+          name: parent.user?.name,
+          email: parent.user?.email
+        },
+        students: transformedStudents,
+        totalOutstanding,
+        totalExpected,
+        totalPaid
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching parent dashboard:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get parent's children (simplified version)
+app.get('/api/parents/children', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let userId = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
+    }
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const parent = await prisma.parent.findUnique({
+      where: { userId: userId },
+      include: {
+        students: {
+          include: {
+            user: true,
+            class: true
+          }
+        }
+      }
+    });
+
+    if (!parent) {
+      return res.json({ data: [] });
+    }
+
+    const children = parent.students.map(student => ({
+      id: student.id,
+      name: student.user?.name,
+      admissionNo: student.admissionNo,
+      className: student.class?.name
+    }));
+
+    res.json({ data: children });
+
+  } catch (error) {
+    console.error('Error fetching parent children:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Get available students (students without parents)
 app.get('/api/parent/available-students', async (req, res) => {
@@ -5336,12 +5663,12 @@ app.get('/api/parent/available-students', async (req, res) => {
 
     const students = await prisma.student.findMany({
       where,
-      include: {
-        user: true,
-        class: true
+      include: { 
+        user: true, 
+        class: true 
       },
-      orderBy: {
-        user: { name: 'asc' }
+      orderBy: { 
+        user: { name: 'asc' } 
       }
     });
 
@@ -5361,7 +5688,6 @@ app.get('/api/parent/available-students', async (req, res) => {
 });
 
 // Link a child to a parent
-// Parent-Child Linking - FIXED VERSION
 app.post('/api/parent/link-child', async (req, res) => {
   try {
     console.log('🔗 LINK CHILD ENDPOINT HIT');
@@ -5487,247 +5813,19 @@ app.delete('/api/parent/unlink-child/:studentId', async (req, res) => {
   }
 });
 
-// Get parent's children
-app.get('/api/parents/children', async (req, res) => {
-  try {
-    const authHeader = req.headers.authorization;
-    let userId = null;
 
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.split(' ')[1];
-      const decoded = Buffer.from(token, 'base64').toString();
-      userId = decoded.split(':')[0];
-    }
+// ==================== STATIC FILE SERVING (FRONTEND) ====================
+// Serve frontend static files - MUST be before API routes
+app.use(express.static("public"));
 
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    const parent = await prisma.parent.findUnique({
-      where: { userId: userId },
-      include: {
-        students: {
-          include: {
-            user: true,
-            class: true
-          }
-        }
-      }
-    });
-
-    if (!parent) {
-      return res.json({ data: [] });
-    }
-
-    const children = parent.students.map(student => ({
-      id: student.id,
-      name: student.user?.name,
-      admissionNo: student.admissionNo,
-      className: student.class?.name
-    }));
-
-    res.json({ data: children });
-
-  } catch (error) {
-    console.error('Error fetching parent children:', error);
-    res.status(500).json({ error: error.message });
+// Handle React Router - serve index.html for all non-API routes
+// Use a catch-all regex but check path inside handler
+app.get(/.*/, (req, res) => {
+  // Skip API routes - let them 404 if not handled above
+  if (req.path.startsWith("/api/")) {
+    return res.status(404).json({ error: "API endpoint not found" });
   }
-});
-
-// Get parent by user ID
-app.get('/api/parents/user/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-
-    const parent = await prisma.parent.findUnique({
-      where: { userId: userId },
-      include: {
-        user: true,
-        students: {
-          include: {
-            user: true,
-            class: true
-          }
-        }
-      }
-    });
-
-    if (!parent) {
-      return res.status(404).json({ error: 'Parent not found' });
-    }
-
-    res.json(parent);
-  } catch (error) {
-    console.error('Error fetching parent by user ID:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ==================== DELETE USER ENDPOINT ====================
-app.delete('/api/users/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        student: true,
-        teacher: true,
-        parent: true
-      }
-    });
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    // Prevent deleting main admin
-    if (user.email === 'admin@school.com') {
-      return res.status(400).json({ error: 'Cannot delete the main admin account' });
-    }
-
-    // Delete related records
-    if (user.student) {
-      await prisma.student.deleteMany({ where: { userId: user.id } });
-    }
-    if (user.teacher) {
-      await prisma.teacher.deleteMany({ where: { userId: user.id } });
-    }
-    if (user.parent) {
-      await prisma.parent.deleteMany({ where: { userId: user.id } });
-    }
-
-    await prisma.user.delete({ where: { id: userId } });
-
-    res.json({ message: 'User deleted successfully' });
-
-  } catch (error) {
-    console.error('Error deleting user:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ==================== START SERVER ====================
-// Delete a session (only if not active and no dependencies)
-app.delete('/api/sessions/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    // Check if session exists
-    const session = await prisma.session.findUnique({
-      where: { id },
-      include: { terms: true }
-    });
-
-    if (!session) {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-
-    // Prevent deletion of active session
-    if (session.isActive) {
-      return res.status(400).json({ error: 'Cannot delete active session. Please set another session as active first.' });
-    }
-
-    // Delete all terms first (cascade)
-    await prisma.term.deleteMany({
-      where: { sessionId: id }
-    });
-
-    // Delete the session
-    await prisma.session.delete({
-      where: { id }
-    });
-
-    console.log(`✅ Session deleted: ${session.name}`);
-    res.json({ message: 'Session deleted successfully' });
-
-  } catch (error) {
-    console.error('Error deleting session:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ==================== CREATE PARENT PROFILE ====================
-app.post('/api/parents/create-profile', async (req, res) => {
-  try {
-    const authHeader = req.headers.authorization;
-    let userId = null;
-
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.split(' ')[1];
-      const decoded = Buffer.from(token, 'base64').toString();
-      userId = decoded.split(':')[0];
-    }
-
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    // Check if parent profile already exists
-    const existingParent = await prisma.parent.findUnique({
-      where: { userId: userId },
-      include: { user: true }
-    });
-
-    if (existingParent) {
-      return res.json({ 
-        success: true, 
-        message: 'Parent profile already exists', 
-        parent: existingParent 
-      });
-    }
-
-    // Create parent profile
-    const parent = await prisma.parent.create({
-      data: { userId: userId },
-      include: { user: true }
-    });
-
-    console.log(`✅ Created parent profile for: ${parent.user?.name} (${parent.user?.email})`);
-
-    res.json({ 
-      success: true, 
-      message: 'Parent profile created successfully', 
-      parent: parent 
-    });
-
-  } catch (error) {
-    console.error('Error creating parent profile:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get current parent profile
-app.get('/api/parents/me', async (req, res) => {
-  try {
-    const authHeader = req.headers.authorization;
-    let userId = null;
-
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.split(' ')[1];
-      const decoded = Buffer.from(token, 'base64').toString();
-      userId = decoded.split(':')[0];
-    }
-
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    const parent = await prisma.parent.findUnique({
-      where: { userId: userId },
-      include: { user: true, students: { include: { user: true, class: true } } }
-    });
-
-    if (!parent) {
-      return res.status(404).json({ error: 'Parent profile not found' });
-    }
-
-    res.json(parent);
-
-  } catch (error) {
-    console.error('Error fetching parent profile:', error);
-    res.status(500).json({ error: error.message });
-  }
+  res.sendFile(path.resolve("public", "index.html"));
 });
 
 const server = app.listen(port, () => {
