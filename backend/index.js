@@ -3720,6 +3720,151 @@ app.get('/api/fees/parent', async (req, res) => {
         students: {
           include: {
             user: true,
+            class: true,  // Make sure class is included
+            fees: {
+              include: {
+                payments: true,
+                term: {
+                  include: {
+                    session: true
+                  }
+                },
+                feeItems: true
+              },
+              orderBy: { createdAt: 'desc' }
+            }
+          }
+        }
+      }
+    });
+    
+    if (!parent) {
+      return res.json({ 
+        data: { 
+          fees: [], 
+          totalOutstanding: 0 
+        } 
+      });
+    }
+    
+    if (parent.students.length === 0) {
+      return res.json({ 
+        data: { 
+          fees: [], 
+          totalOutstanding: 0 
+        } 
+      });
+    }
+    
+    // Collect all fees from all children
+    const allFees = [];
+    for (const student of parent.students) {
+      for (const fee of student.fees) {
+        allFees.push({
+          ...fee,
+          student: {
+            id: student.id,
+            name: student.user?.name,
+            admissionNo: student.admissionNo,
+            className: student.class?.name || 'No Class',  // Get class name
+            classSection: student.class?.section || '',
+            grade: student.class?.grade || 0
+          }
+        });
+      }
+    }
+    
+    const totalOutstanding = allFees.reduce((sum, fee) => sum + (fee.balance || 0), 0);
+    
+    const transformedFees = allFees.map(fee => {
+      let firstName = 'Unknown';
+      let lastName = '';
+      if (fee.student?.name) {
+        const nameParts = fee.student.name.split(' ');
+        firstName = nameParts[0] || 'Unknown';
+        lastName = nameParts.slice(1).join(' ') || '';
+      }
+      
+      return {
+        id: fee.id,
+        studentId: fee.studentId,
+        termId: fee.termId,
+        totalAmount: fee.totalAmount,
+        amountPaid: fee.paidAmount,
+        balance: fee.balance,
+        status: fee.status === 'PAID' ? 'PAID' : fee.status === 'PARTIAL' ? 'PARTIALLY_PAID' : 'UNPAID',
+        createdAt: fee.createdAt,
+        updatedAt: fee.updatedAt,
+        student: {
+          id: fee.student.id,
+          name: fee.student.name,
+          firstName: firstName,
+          lastName: lastName,
+          admissionNo: fee.student.admissionNo,
+          className: fee.student.className,
+          class: {
+            name: fee.student.className,
+            section: fee.student.classSection,
+            grade: fee.student.grade
+          }
+        },
+        term: fee.term ? {
+          id: fee.term.id,
+          name: fee.term.name,
+          session: fee.term.session ? {
+            id: fee.term.session.id,
+            name: fee.term.session.name,
+            year: fee.term.session.name
+          } : null
+        } : null,
+        payments: fee.payments ? fee.payments.map(p => ({
+          id: p.id,
+          amount: p.amount,
+          date: p.paymentDate,
+          method: p.paymentMethod,
+          reference: p.referenceNo
+        })) : []
+      };
+    });
+    
+    console.log(`✅ Found ${transformedFees.length} fees for parent's children`);
+    
+    res.json({
+      data: {
+        fees: transformedFees,
+        totalOutstanding
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error fetching parent fees:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+    console.log('👪 Fetching parent fees...');
+    
+    const authHeader = req.headers.authorization;
+    let userId = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
+    }
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    console.log('🔍 Fetching fees for user ID:', userId);
+
+    // Find parent using the authenticated user's ID
+    const parent = await prisma.parent.findUnique({
+      where: { userId: userId },
+      include: {
+        students: {
+          include: {
+            user: true,
             class: true,
             fees: {
               include: {
