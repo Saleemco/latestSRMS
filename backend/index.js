@@ -3698,21 +3698,24 @@ app.get('/api/fees/parent', async (req, res) => {
   try {
     console.log('👪 Fetching parent fees...');
     
-    const parentUser = await prisma.user.findFirst({
-      where: { role: 'PARENT' }
-    });
-    
-    if (!parentUser) {
-      return res.json({ 
-        data: { 
-          fees: [], 
-          totalOutstanding: 0 
-        } 
-      });
+    const authHeader = req.headers.authorization;
+    let userId = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
     }
-    
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    console.log('🔍 Fetching fees for user ID:', userId);
+
+    // Find parent using the authenticated user's ID
     const parent = await prisma.parent.findUnique({
-      where: { userId: parentUser.id },
+      where: { userId: userId },
       include: {
         students: {
           include: {
@@ -3727,14 +3730,15 @@ app.get('/api/fees/parent', async (req, res) => {
                   }
                 },
                 feeItems: true
-              }
+              },
+              orderBy: { createdAt: 'desc' }
             }
           }
         }
       }
     });
     
-    if (!parent || parent.students.length === 0) {
+    if (!parent) {
       return res.json({ 
         data: { 
           fees: [], 
@@ -3743,39 +3747,38 @@ app.get('/api/fees/parent', async (req, res) => {
       });
     }
     
-    const studentIds = parent.students.map(s => s.id);
+    if (parent.students.length === 0) {
+      return res.json({ 
+        data: { 
+          fees: [], 
+          totalOutstanding: 0 
+        } 
+      });
+    }
     
-    const fees = await prisma.fee.findMany({
-      where: {
-        studentId: { in: studentIds }
-      },
-      include: {
-        student: {
-          include: {
-            user: true,
-            class: true
+    // Collect all fees from all children
+    const allFees = [];
+    for (const student of parent.students) {
+      for (const fee of student.fees) {
+        allFees.push({
+          ...fee,
+          student: {
+            id: student.id,
+            name: student.user?.name,
+            admissionNo: student.admissionNo,
+            className: student.class?.name
           }
-        },
-        term: {
-          include: {
-            session: true
-          }
-        },
-        payments: true,
-        feeItems: true
-      },
-      orderBy: { createdAt: 'desc' }
-    });
+        });
+      }
+    }
     
-    console.log(`✅ Found ${fees.length} fees for parent's children`);
+    const totalOutstanding = allFees.reduce((sum, fee) => sum + fee.balance, 0);
     
-    const totalOutstanding = fees.reduce((sum, fee) => sum + fee.balance, 0);
-    
-    const transformedFees = fees.map(fee => {
+    const transformedFees = allFees.map(fee => {
       let firstName = 'Unknown';
       let lastName = '';
-      if (fee.student?.user?.name) {
-        const nameParts = fee.student.user.name.split(' ');
+      if (fee.student?.name) {
+        const nameParts = fee.student.name.split(' ');
         firstName = nameParts[0] || 'Unknown';
         lastName = nameParts.slice(1).join(' ') || '';
       }
@@ -3787,31 +3790,23 @@ app.get('/api/fees/parent', async (req, res) => {
         totalAmount: fee.totalAmount,
         amountPaid: fee.paidAmount,
         balance: fee.balance,
-        status: fee.status === 'PAID' ? 'PAID' : 
-                fee.status === 'PARTIAL' ? 'PARTIALLY_PAID' : 'UNPAID',
+        status: fee.status === 'PAID' ? 'PAID' : fee.status === 'PARTIAL' ? 'PARTIALLY_PAID' : 'UNPAID',
         createdAt: fee.createdAt,
         updatedAt: fee.updatedAt,
         student: {
-          id: fee.student?.id,
-          admissionNo: fee.student?.admissionNo || 'N/A',
-          user: {
-            firstName: firstName,
-            lastName: lastName,
-            email: fee.student?.user?.email || ''
-          },
-          class: fee.student?.class ? {
-            name: fee.student.class.name,
-            section: fee.student.class.section || ''
-          } : null
+          id: fee.student.id,
+          name: fee.student.name,
+          admissionNo: fee.student.admissionNo,
+          className: fee.student.className
         },
         term: fee.term ? {
           id: fee.term.id,
           name: fee.term.name,
-          session: {
-            id: fee.term.session?.id,
-            name: fee.term.session?.name,
-            year: fee.term.session?.name
-          }
+          session: fee.term.session ? {
+            id: fee.term.session.id,
+            name: fee.term.session.name,
+            year: fee.term.session.name
+          } : null
         } : null,
         payments: fee.payments ? fee.payments.map(p => ({
           id: p.id,
@@ -3822,6 +3817,8 @@ app.get('/api/fees/parent', async (req, res) => {
         })) : []
       };
     });
+    
+    console.log(`✅ Found ${transformedFees.length} fees for parent's children`);
     
     res.json({
       data: {
