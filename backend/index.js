@@ -3799,12 +3799,7 @@ const transformedFees = allFees.map(fee => {
       firstName: firstName,
       lastName: lastName,
       admissionNo: fee.student.admissionNo,
-      className: fee.student.class?.name || 'No Class',  // ← FIXED
-      class: {
-        name: fee.student.class?.name || 'No Class',
-        section: fee.student.class?.section || '',
-        grade: fee.student.class?.grade || 0
-      }
+      className: fee.student.className || fee.student.class?.name || 'Class Not Assigned',  // ← ONLY THIS LINE CHANGED
     },
     term: fee.term ? {
       id: fee.term.id,
