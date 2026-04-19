@@ -3737,73 +3737,82 @@ app.get('/api/fees/parent', async (req, res) => {
       }
     });
     
-    if (!parent) {
-      return res.json({ data: { fees: [], totalOutstanding: 0 } });
+    if (!parent || parent.students.length === 0) {
+      return res.json({ 
+        data: { 
+          fees: [], 
+          totalOutstanding: 0 
+        } 
+      });
     }
     
-    if (parent.students.length === 0) {
-      return res.json({ data: { fees: [], totalOutstanding: 0 } });
-    }
-    
-    // Group fees by child - THIS IS THE KEY CHANGE
+    // Group fees by child - matching frontend expected structure
     const groupedFees = parent.students.map(student => {
-      const transformedFees = student.fees.map(fee => ({
-        id: fee.id,
-        studentId: fee.studentId,
-        termId: fee.termId,
-        totalAmount: fee.totalAmount,
-        amountPaid: fee.paidAmount,
-        balance: fee.balance,
+      // Transform each fee with safe default values
+      const transformedFees = (student.fees || []).map(fee => ({
+        id: fee.id || '',
+        studentId: fee.studentId || '',
+        termId: fee.termId || '',
+        totalAmount: Number(fee.totalAmount) || 0,
+        amountPaid: Number(fee.paidAmount) || 0,
+        balance: Number(fee.balance) || 0,
         status: fee.status === 'PAID' ? 'PAID' : fee.status === 'PARTIAL' ? 'PARTIALLY_PAID' : 'UNPAID',
-        createdAt: fee.createdAt,
-        updatedAt: fee.updatedAt,
+        createdAt: fee.createdAt || new Date(),
+        updatedAt: fee.updatedAt || new Date(),
         term: fee.term ? {
-          id: fee.term.id,
-          name: fee.term.name,
+          id: fee.term.id || '',
+          name: fee.term.name || 'N/A',
           session: fee.term.session ? {
-            id: fee.term.session.id,
-            name: fee.term.session.name,
-            year: fee.term.session.name
+            id: fee.term.session.id || '',
+            name: fee.term.session.name || 'N/A',
+            year: fee.term.session.name || 'N/A'
           } : null
         } : null,
-        payments: fee.payments ? fee.payments.map(p => ({
-          id: p.id,
-          amount: p.amount,
-          date: p.paymentDate,
-          method: p.paymentMethod,
-          reference: p.referenceNo
-        })) : []
+        payments: (fee.payments || []).map(p => ({
+          id: p.id || '',
+          amount: Number(p.amount) || 0,
+          date: p.paymentDate || new Date(),
+          method: p.paymentMethod || 'CASH',
+          reference: p.referenceNo || ''
+        }))
       }));
       
+      // Return the child data structure exactly as frontend expects
       return {
         childId: student.id,
         childName: student.user?.name || 'Unknown',
         admissionNo: student.admissionNo || 'N/A',
         class: student.class ? {
-          name: student.class.name,
+          name: student.class.name || 'No Class Assigned',
           section: student.class.section || '',
-          grade: student.class.grade
+          grade: student.class.grade || 0
         } : { name: 'No Class Assigned', section: '', grade: 0 },
         fees: transformedFees
       };
     });
     
+    // Calculate total outstanding across all children
     const totalOutstanding = groupedFees.reduce((sum, child) => 
-      sum + child.fees.reduce((childSum, fee) => childSum + fee.balance, 0), 0
+      sum + child.fees.reduce((childSum, fee) => childSum + (fee.balance || 0), 0), 0
     );
     
     console.log(`✅ Found ${groupedFees.length} children with fee records`);
+    console.log(`💰 Total outstanding: ${totalOutstanding}`);
     
+    // Return in the exact format frontend expects
     res.json({
       data: {
         fees: groupedFees,
-        totalOutstanding
+        totalOutstanding: totalOutstanding || 0
       }
     });
     
   } catch (error) {
     console.error('Error fetching parent fees:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      error: error.message,
+      data: { fees: [], totalOutstanding: 0 }
+    });
   }
 });
 

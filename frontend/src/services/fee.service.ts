@@ -1,4 +1,4 @@
-﻿import api from './api';
+import api from './api';
 import toast from 'react-hot-toast';
 
 export interface StudentFee {
@@ -122,7 +122,7 @@ export const feeService = {
     }
   },
 
-  // Get fees for parent's children
+  // Get fees for parent's children - FIXED VERSION
   getParentFees: async () => {
     try {
       console.log('👪 Fetching parent fees from API...');
@@ -131,48 +131,99 @@ export const feeService = {
       
       const result = response.data?.data || { fees: [], totalOutstanding: 0 };
       
+      // Ensure fees is an array
+      const feesArray = Array.isArray(result.fees) ? result.fees : [];
+      
       const feesByStudent: Record<string, any> = {};
       
-      result.fees.forEach((fee: any) => {
+      feesArray.forEach((fee: any) => {
         const studentId = fee.studentId;
+        
+        // Skip if no studentId
+        if (!studentId) return;
+        
         if (!feesByStudent[studentId]) {
+          // Extract student info safely
           let firstName = 'Unknown';
           let lastName = '';
-          if (fee.student?.user?.name) {
-            const nameParts = fee.student.user.name.split(' ');
-            firstName = nameParts[0] || 'Unknown';
-            lastName = nameParts.slice(1).join(' ') || '';
-          } else if (fee.student?.user?.firstName) {
-            firstName = fee.student.user.firstName;
-            lastName = fee.student.user.lastName || '';
+          let admissionNo = 'N/A';
+          let classInfo = { name: 'No Class Assigned', section: '', grade: 0 };
+          
+          // Try to get student info from different possible locations in the response
+          if (fee.student) {
+            // Check for name in different formats
+            if (fee.student.name) {
+              const nameParts = fee.student.name.split(' ');
+              firstName = nameParts[0] || 'Unknown';
+              lastName = nameParts.slice(1).join(' ') || '';
+            } else if (fee.student.firstName) {
+              firstName = fee.student.firstName;
+              lastName = fee.student.lastName || '';
+            } else if (fee.student.user?.name) {
+              const nameParts = fee.student.user.name.split(' ');
+              firstName = nameParts[0] || 'Unknown';
+              lastName = nameParts.slice(1).join(' ') || '';
+            } else if (fee.student.user?.firstName) {
+              firstName = fee.student.user.firstName;
+              lastName = fee.student.user.lastName || '';
+            }
+            
+            admissionNo = fee.student.admissionNo || 'N/A';
+            
+            if (fee.student.class) {
+              classInfo = {
+                name: fee.student.class.name || 'No Class Assigned',
+                section: fee.student.class.section || '',
+                grade: fee.student.class.grade || 0
+              };
+            }
           }
           
           feesByStudent[studentId] = {
+            childId: studentId,
             childName: `${firstName} ${lastName}`.trim(),
-            admissionNo: fee.student?.admissionNo || 'N/A',
-            class: fee.student?.class,
+            admissionNo: admissionNo,
+            class: classInfo,
             fees: []
           };
         }
+        
+        // Add fee with safe default values - THIS PREVENTS THE toLocaleString ERROR
         feesByStudent[studentId].fees.push({
-          id: fee.id,
-          studentId: fee.studentId,
-          termId: fee.termId,
-          totalAmount: fee.totalAmount,
-          amountPaid: fee.amountPaid,
-          balance: fee.balance,
-          status: fee.status,
-          term: fee.term,
-          payments: fee.payments || []
+          id: fee.id || '',
+          studentId: fee.studentId || '',
+          termId: fee.termId || '',
+          totalAmount: fee.totalAmount ?? 0,
+          amountPaid: fee.amountPaid ?? 0,
+          balance: fee.balance ?? 0,
+          status: fee.status || 'UNPAID',
+          term: fee.term ? {
+            id: fee.term.id || '',
+            name: fee.term.name || 'N/A',
+            session: fee.term.session ? {
+              id: fee.term.session.id || '',
+              name: fee.term.session.name || 'N/A',
+              year: fee.term.session.name || 'N/A'
+            } : null
+          } : null,
+          payments: Array.isArray(fee.payments) ? fee.payments : []
         });
       });
       
       const groupedFees = Object.values(feesByStudent);
       console.log(`✅ Grouped ${groupedFees.length} children with fees`);
       
+      // Calculate total outstanding safely
+      const totalOutstanding = groupedFees.reduce((sum, child: any) => 
+        sum + (child.fees?.reduce((childSum: number, fee: any) => 
+          childSum + (fee.balance ?? 0), 0) ?? 0), 0
+      );
+      
+      console.log(`💰 Total outstanding calculated: ${totalOutstanding}`);
+      
       return {
         fees: groupedFees,
-        totalOutstanding: result.totalOutstanding
+        totalOutstanding: totalOutstanding
       };
     } catch (error: any) {
       console.error('❌ Error fetching parent fees:', error);
