@@ -122,108 +122,37 @@ export const feeService = {
     }
   },
 
-  // Get fees for parent's children - FIXED VERSION
+  // Get fees for parent's children - FIXED VERSION (no regrouping needed)
   getParentFees: async () => {
     try {
       console.log('👪 Fetching parent fees from API...');
       const response = await api.get('/fees/parent');
       console.log('✅ Parent fees response:', response.data);
       
+      // The API already returns the data in the correct grouped format:
+      // {
+      //   data: {
+      //     fees: [
+      //       {
+      //         childId: "...",
+      //         childName: "...",
+      //         admissionNo: "...",
+      //         class: { name: "...", section: "...", grade: ... },
+      //         fees: [...]
+      //       }
+      //     ],
+      //     totalOutstanding: ...
+      //   }
+      // }
+      
       const result = response.data?.data || { fees: [], totalOutstanding: 0 };
       
-      // Ensure fees is an array
-      const feesArray = Array.isArray(result.fees) ? result.fees : [];
+      console.log(`📊 Found ${result.fees?.length || 0} children with fee records`);
       
-      const feesByStudent: Record<string, any> = {};
-      
-      feesArray.forEach((fee: any) => {
-        const studentId = fee.studentId;
-        
-        // Skip if no studentId
-        if (!studentId) return;
-        
-        if (!feesByStudent[studentId]) {
-          // Extract student info safely
-          let firstName = 'Unknown';
-          let lastName = '';
-          let admissionNo = 'N/A';
-          let classInfo = { name: 'No Class Assigned', section: '', grade: 0 };
-          
-          // Try to get student info from different possible locations in the response
-          if (fee.student) {
-            // Check for name in different formats
-            if (fee.student.name) {
-              const nameParts = fee.student.name.split(' ');
-              firstName = nameParts[0] || 'Unknown';
-              lastName = nameParts.slice(1).join(' ') || '';
-            } else if (fee.student.firstName) {
-              firstName = fee.student.firstName;
-              lastName = fee.student.lastName || '';
-            } else if (fee.student.user?.name) {
-              const nameParts = fee.student.user.name.split(' ');
-              firstName = nameParts[0] || 'Unknown';
-              lastName = nameParts.slice(1).join(' ') || '';
-            } else if (fee.student.user?.firstName) {
-              firstName = fee.student.user.firstName;
-              lastName = fee.student.user.lastName || '';
-            }
-            
-            admissionNo = fee.student.admissionNo || 'N/A';
-            
-            if (fee.student.class) {
-              classInfo = {
-                name: fee.student.class.name || 'No Class Assigned',
-                section: fee.student.class.section || '',
-                grade: fee.student.class.grade || 0
-              };
-            }
-          }
-          
-          feesByStudent[studentId] = {
-            childId: studentId,
-            childName: `${firstName} ${lastName}`.trim(),
-            admissionNo: admissionNo,
-            class: classInfo,
-            fees: []
-          };
-        }
-        
-        // Add fee with safe default values - THIS PREVENTS THE toLocaleString ERROR
-        feesByStudent[studentId].fees.push({
-          id: fee.id || '',
-          studentId: fee.studentId || '',
-          termId: fee.termId || '',
-          totalAmount: fee.totalAmount ?? 0,
-          amountPaid: fee.amountPaid ?? 0,
-          balance: fee.balance ?? 0,
-          status: fee.status || 'UNPAID',
-          term: fee.term ? {
-            id: fee.term.id || '',
-            name: fee.term.name || 'N/A',
-            session: fee.term.session ? {
-              id: fee.term.session.id || '',
-              name: fee.term.session.name || 'N/A',
-              year: fee.term.session.name || 'N/A'
-            } : null
-          } : null,
-          payments: Array.isArray(fee.payments) ? fee.payments : []
-        });
-      });
-      
-      const groupedFees = Object.values(feesByStudent);
-      console.log(`✅ Grouped ${groupedFees.length} children with fees`);
-      
-      // Calculate total outstanding safely
-      const totalOutstanding = groupedFees.reduce((sum, child: any) => 
-        sum + (child.fees?.reduce((childSum: number, fee: any) => 
-          childSum + (fee.balance ?? 0), 0) ?? 0), 0
-      );
-      
-      console.log(`💰 Total outstanding calculated: ${totalOutstanding}`);
-      
+      // Return the data directly - no transformation needed
       return {
-        fees: groupedFees,
-        totalOutstanding: totalOutstanding
+        fees: result.fees || [],
+        totalOutstanding: result.totalOutstanding || 0
       };
     } catch (error: any) {
       console.error('❌ Error fetching parent fees:', error);
