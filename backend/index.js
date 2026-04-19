@@ -3757,21 +3757,27 @@ app.get('/api/fees/parent', async (req, res) => {
     }
     
     // Collect all fees from all children
-    const allFees = [];
-    for (const student of parent.students) {
-      for (const fee of student.fees) {
-        allFees.push({
-          ...fee,
-          student: {
-            id: student.id,
-            name: student.user?.name,
-            admissionNo: student.admissionNo,
-            className: student.class?.name
-          }
-        });
+   const allFees = [];
+for (const student of parent.students) {
+  for (const fee of student.fees) {
+    allFees.push({
+      ...fee,
+      student: {
+        id: student.id,
+        name: student.user?.name,
+        firstName: student.user?.name?.split(' ')[0] || '',
+        lastName: student.user?.name?.split(' ').slice(1).join(' ') || '',
+        admissionNo: student.admissionNo,
+        className: student.class?.name || 'No Class',  // This matches dashboard
+        class: student.class ? {
+          name: student.class.name,
+          section: student.class.section,
+          grade: student.class.grade
+        } : null
       }
-    }
-    
+    });
+  }
+}
     const totalOutstanding = allFees.reduce((sum, fee) => sum + fee.balance, 0);
     
 const transformedFees = allFees.map(fee => {
