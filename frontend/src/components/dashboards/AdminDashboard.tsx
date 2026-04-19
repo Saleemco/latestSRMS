@@ -5,7 +5,7 @@ import { Card } from "../ui/Card";
 import { Badge } from "../ui/Badge";
 import { Spinner } from "../ui/Spinner";
 import { SearchBar } from "../ui/SearchBar";
-import { TrashIcon, PlusIcon, XMarkIcon, UsersIcon, UserGroupIcon, AcademicCapIcon } from "@heroicons/react/24/outline";
+import { TrashIcon, PlusIcon, XMarkIcon, UsersIcon, UserGroupIcon, AcademicCapIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 import toast from "react-hot-toast";
 import api from "../../services/api";
 
@@ -17,6 +17,8 @@ export const AdminDashboard = () => {
   const [parentSearchTerm, setParentSearchTerm] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [userToDelete, setUserToDelete] = useState<any>(null);
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -79,7 +81,7 @@ export const AdminDashboard = () => {
     },
   });
 
-  // Delete user mutation
+  // Delete single user mutation
   const deleteUserMutation = useMutation({
     mutationFn: async (userId: string) => {
       const response = await api.delete(`/users/${userId}`);
@@ -92,6 +94,24 @@ export const AdminDashboard = () => {
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || "Failed to delete user");
+    },
+  });
+
+  // Delete all non-admin users mutation
+  const deleteAllUsersMutation = useMutation({
+    mutationFn: async () => {
+      const response = await api.delete('/admin/delete-all-users');
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["all-users"] });
+      setShowDeleteAllModal(false);
+      setIsDeletingAll(false);
+      toast.success(data.message || "All non-admin users deleted successfully!");
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Failed to delete users");
+      setIsDeletingAll(false);
     },
   });
 
@@ -179,6 +199,11 @@ export const AdminDashboard = () => {
     }
   };
 
+  const handleDeleteAllUsers = () => {
+    setIsDeletingAll(true);
+    deleteAllUsersMutation.mutate();
+  };
+
   const handleClassToggle = (classId: string) => {
     setFormData(prev => ({
       ...prev,
@@ -213,6 +238,8 @@ export const AdminDashboard = () => {
     { value: "PARENT", label: "Parent" },
     { value: "STUDENT", label: "Student" },
   ];
+
+  const nonAdminCount = allUsers?.filter((u: any) => u.email !== 'admin@school.com').length || 0;
 
   return (
     <div className="space-y-6">
@@ -346,7 +373,7 @@ export const AdminDashboard = () => {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete Single User Confirmation Modal */}
       {userToDelete && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-6">
@@ -367,6 +394,46 @@ export const AdminDashboard = () => {
                 className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete All Confirmation Modal */}
+      {showDeleteAllModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <ExclamationTriangleIcon className="w-8 h-8 text-red-600" />
+              <h2 className="text-xl font-bold text-gray-900">Confirm Mass Deletion</h2>
+            </div>
+            <p className="text-gray-600 mb-4">
+              Are you absolutely sure? This will permanently delete:
+            </p>
+            <ul className="list-disc list-inside text-sm text-gray-600 mb-4 space-y-1">
+              <li>All {teachers.length} teachers and their assignments</li>
+              <li>All {students.length} students and their records</li>
+              <li>All {parents.length} parents and their linked children</li>
+              <li>All fees, payments, grades, and attendance records</li>
+              <li>All sessions and terms</li>
+            </ul>
+            <p className="text-red-600 font-semibold mb-4">
+              This action cannot be undone!
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteAllModal(false)}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAllUsers}
+                disabled={isDeletingAll}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                {isDeletingAll ? "Deleting..." : "Yes, Delete All"}
               </button>
             </div>
           </div>
@@ -410,6 +477,31 @@ export const AdminDashboard = () => {
             </div>
           </div>
         </Card>
+      </div>
+
+      {/* Danger Zone - Delete All Users */}
+      <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h3 className="text-lg font-semibold text-red-800">Danger Zone</h3>
+            <p className="text-sm text-red-600">
+              Permanently delete ALL students, teachers, parents, and their related data.
+              <br />
+              <strong>Only the admin account will remain. This action cannot be undone!</strong>
+            </p>
+            <p className="text-xs text-red-500 mt-1">
+              Users to delete: {nonAdminCount} non-admin users
+            </p>
+          </div>
+          <button
+            onClick={() => setShowDeleteAllModal(true)}
+            disabled={nonAdminCount === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <TrashIcon className="w-5 h-5" />
+            Delete All Non-Admin Users
+          </button>
+        </div>
       </div>
 
       {/* Teachers Section */}

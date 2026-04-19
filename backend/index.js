@@ -5849,6 +5849,85 @@ app.delete('/api/parent/unlink-child/:studentId', async (req, res) => {
   }
 });
 
+// DELETE ALL NON-ADMIN USERS (Admin only)
+app.delete('/api/admin/delete-all-users', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let userId = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
+    }
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Verify admin access
+    const admin = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (admin?.email !== 'admin@school.com') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    // Get count of users to delete
+    const usersToDelete = await prisma.user.findMany({
+      where: { email: { not: 'admin@school.com' } },
+      select: { id: true, email: true, name: true, role: true }
+    });
+
+    if (usersToDelete.length === 0) {
+      return res.json({ message: 'No non-admin users to delete' });
+    }
+
+    console.log(`⚠️ Deleting ${usersToDelete.length} non-admin users...`);
+
+    // Delete in correct order
+    await prisma.$transaction([
+      prisma.payment.deleteMany({
+        where: { recordedBy: { email: { not: 'admin@school.com' } } }
+      }),
+      prisma.discount.deleteMany({
+        where: { approvedBy: { email: { not: 'admin@school.com' } } }
+      }),
+      prisma.grade.deleteMany({
+        where: { student: { user: { email: { not: 'admin@school.com' } } } }
+      }),
+      prisma.attendance.deleteMany({
+        where: { student: { user: { email: { not: 'admin@school.com' } } } }
+      }),
+      prisma.fee.deleteMany({
+        where: { student: { user: { email: { not: 'admin@school.com' } } } }
+      }),
+      prisma.student.deleteMany({
+        where: { user: { email: { not: 'admin@school.com' } } }
+      }),
+      prisma.teacher.deleteMany({
+        where: { user: { email: { not: 'admin@school.com' } } }
+      }),
+      prisma.parent.deleteMany({
+        where: { user: { email: { not: 'admin@school.com' } } }
+      }),
+      prisma.user.deleteMany({
+        where: { email: { not: 'admin@school.com' } }
+      })
+    ]);
+
+    res.json({
+      success: true,
+      message: `Deleted ${usersToDelete.length} non-admin users`,
+      deletedUsers: usersToDelete.map(u => ({ email: u.email, role: u.role }))
+    });
+
+  } catch (error) {
+    console.error('Error deleting users:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // ==================== STATIC FILE SERVING (FRONTEND) ====================
 // Serve frontend static files - MUST be before API routes
