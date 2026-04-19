@@ -3713,7 +3713,6 @@ app.get('/api/fees/parent', async (req, res) => {
 
     console.log('🔍 Fetching fees for user ID:', userId);
 
-    // Find parent using the authenticated user's ID
     const parent = await prisma.parent.findUnique({
       where: { userId: userId },
       include: {
@@ -3739,97 +3738,65 @@ app.get('/api/fees/parent', async (req, res) => {
     });
     
     if (!parent) {
-      return res.json({ 
-        data: { 
-          fees: [], 
-          totalOutstanding: 0 
-        } 
-      });
+      return res.json({ data: { fees: [], totalOutstanding: 0 } });
     }
     
     if (parent.students.length === 0) {
-      return res.json({ 
-        data: { 
-          fees: [], 
-          totalOutstanding: 0 
-        } 
-      });
+      return res.json({ data: { fees: [], totalOutstanding: 0 } });
     }
     
-    // Collect all fees from all children
-   const allFees = [];
-for (const student of parent.students) {
-  for (const fee of student.fees) {
-    allFees.push({
-      ...fee,
-      student: {
-        id: student.id,
-        name: student.user?.name,
-        firstName: student.user?.name?.split(' ')[0] || '',
-        lastName: student.user?.name?.split(' ').slice(1).join(' ') || '',
-        admissionNo: student.admissionNo,
-        className: student.class?.name || 'No Class',  // This matches dashboard
+    // Group fees by child - THIS IS THE KEY CHANGE
+    const groupedFees = parent.students.map(student => {
+      const transformedFees = student.fees.map(fee => ({
+        id: fee.id,
+        studentId: fee.studentId,
+        termId: fee.termId,
+        totalAmount: fee.totalAmount,
+        amountPaid: fee.paidAmount,
+        balance: fee.balance,
+        status: fee.status === 'PAID' ? 'PAID' : fee.status === 'PARTIAL' ? 'PARTIALLY_PAID' : 'UNPAID',
+        createdAt: fee.createdAt,
+        updatedAt: fee.updatedAt,
+        term: fee.term ? {
+          id: fee.term.id,
+          name: fee.term.name,
+          session: fee.term.session ? {
+            id: fee.term.session.id,
+            name: fee.term.session.name,
+            year: fee.term.session.name
+          } : null
+        } : null,
+        payments: fee.payments ? fee.payments.map(p => ({
+          id: p.id,
+          amount: p.amount,
+          date: p.paymentDate,
+          method: p.paymentMethod,
+          reference: p.referenceNo
+        })) : []
+      }));
+      
+      return {
+        childId: student.id,
+        childName: student.user?.name || 'Unknown',
+        admissionNo: student.admissionNo || 'N/A',
         class: student.class ? {
           name: student.class.name,
-          section: student.class.section,
+          section: student.class.section || '',
           grade: student.class.grade
-        } : null
-      }
+        } : { name: 'No Class Assigned', section: '', grade: 0 },
+        fees: transformedFees
+      };
     });
-  }
-}
-    const totalOutstanding = allFees.reduce((sum, fee) => sum + fee.balance, 0);
     
-const transformedFees = allFees.map(fee => {
-  let firstName = 'Unknown';
-  let lastName = '';
-  if (fee.student?.name) {
-    const nameParts = fee.student.name.split(' ');
-    firstName = nameParts[0] || 'Unknown';
-    lastName = nameParts.slice(1).join(' ') || '';
-  }
-  
-  return {
-    id: fee.id,
-    studentId: fee.studentId,
-    termId: fee.termId,
-    totalAmount: fee.totalAmount,
-    amountPaid: fee.paidAmount,
-    balance: fee.balance,
-    status: fee.status === 'PAID' ? 'PAID' : fee.status === 'PARTIAL' ? 'PARTIALLY_PAID' : 'UNPAID',
-    createdAt: fee.createdAt,
-    updatedAt: fee.updatedAt,
-    student: {
-      id: fee.student.id,
-      name: fee.student.name,
-      firstName: firstName,
-      lastName: lastName,
-      admissionNo: fee.student.admissionNo,
-      className: fee.student.className || fee.student.class?.name || 'Class Not Assigned',  // ← ONLY THIS LINE CHANGED
-    },
-    term: fee.term ? {
-      id: fee.term.id,
-      name: fee.term.name,
-      session: fee.term.session ? {
-        id: fee.term.session.id,
-        name: fee.term.session.name,
-        year: fee.term.session.name
-      } : null
-    } : null,
-    payments: fee.payments ? fee.payments.map(p => ({
-      id: p.id,
-      amount: p.amount,
-      date: p.paymentDate,
-      method: p.paymentMethod,
-      reference: p.referenceNo
-    })) : []
-  };
-});
-    console.log(`✅ Found ${transformedFees.length} fees for parent's children`);
+    const totalOutstanding = groupedFees.reduce((sum, child) => 
+      sum + child.fees.reduce((childSum, fee) => childSum + fee.balance, 0), 0
+    );
+    
+    console.log(`✅ Found ${groupedFees.length} children with fee records`);
     
     res.json({
       data: {
-        fees: transformedFees,
+        fees: groupedFees,
         totalOutstanding
       }
     });
