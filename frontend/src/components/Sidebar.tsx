@@ -43,7 +43,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
             items.push({ name: "Teachers", href: "/teachers", icon: AcademicCapIcon });
         }
 
-        // Parents - only Admin/Principal (ADD THIS SECTION)
+        // Parents - only Admin/Principal
         if (user?.role === "ADMIN" || user?.role === "PRINCIPAL") {
             items.push({ name: "Parents", href: "/parents", icon: UserGroupIcon });
         }
@@ -114,7 +114,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
                         leaveFrom="opacity-100"
                         leaveTo="opacity-0"
                     >
-                        <div className="fixed inset-0 bg-gray-900/80" />
+                        <div className="fixed inset-0 bg-gray-900/80 dark:bg-black/80" />
                     </Transition.Child>
 
                     <div className="fixed inset-0 flex">
@@ -140,7 +140,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
                                     <div className="absolute left-full top-0 flex w-16 justify-center pt-5">
                                         <button type="button" className="-m-2.5 p-2.5" onClick={onClose}>
                                             <span className="sr-only">Close sidebar</span>
-                                            <XMarkIcon className="h-6 w-6 text-white" aria-hidden="true" />
+                                            <XMarkIcon className="h-6 w-6 text-white dark:text-gray-300" aria-hidden="true" />
                                         </button>
                                     </div>
                                 </Transition.Child>
@@ -159,14 +159,14 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
 };
 
 const SidebarContent = ({ navigation }: { navigation: any[] }) => (
-    <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-white px-6 pb-4 border-r border-gray-200">
+    <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-white dark:bg-gray-900 px-6 pb-4 border-r border-gray-200 dark:border-gray-800 transition-colors">
         <div className="flex h-16 shrink-0 items-center">
             <img
                 className="h-8 w-auto"
                 src="/vite.svg"
                 alt="School Management"
             />
-            <span className="ml-2 text-xl font-semibold text-gray-900">SchoolMS</span>
+            <span className="ml-2 text-xl font-semibold text-gray-900 dark:text-white transition-colors">SchoolMS</span>
         </div>
         <nav className="flex flex-1 flex-col">
             <ul role="list" className="flex flex-1 flex-col gap-y-7">
@@ -177,11 +177,13 @@ const SidebarContent = ({ navigation }: { navigation: any[] }) => (
                                 <NavLink
                                     to={item.href}
                                     className={({ isActive }) => {
-                                        return 'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold ' +
-                                            (isActive ? 'bg-gray-50 text-indigo-600' : 'text-gray-700 hover:text-indigo-600 hover:bg-gray-50');
+                                        return 'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold transition-colors ' +
+                                            (isActive 
+                                                ? 'bg-gray-50 dark:bg-gray-800 text-indigo-600 dark:text-indigo-400' 
+                                                : 'text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-gray-50 dark:hover:bg-gray-800');
                                     }}
                                 >
-                                    <item.icon className="h-6 w-6 shrink-0 text-gray-400 group-hover:text-indigo-600" aria-hidden="true" />
+                                    <item.icon className="h-6 w-6 shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" aria-hidden="true" />
                                     {item.name}
                                 </NavLink>
                             </li>

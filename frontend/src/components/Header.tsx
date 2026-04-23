@@ -1,6 +1,7 @@
 ﻿import { Bars3Icon, BellIcon, ArrowRightOnRectangleIcon } from "@heroicons/react/24/outline";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { ThemeToggle } from "./ui/ThemeToggle"; // ADD THIS
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -40,14 +41,14 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
   };
 
   return (
-    <header className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-40">
+    <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm sticky top-0 z-40 transition-colors">
       <div className="px-3 sm:px-4 lg:px-6">
         <div className="flex items-center justify-between h-14 sm:h-16">
           {/* Left section - Menu + Logo */}
           <div className="flex items-center gap-2 sm:gap-4">
             <button
               onClick={onMenuClick}
-              className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 lg:hidden"
+              className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 lg:hidden transition-colors"
             >
               <Bars3Icon className="h-5 w-5 sm:h-6 sm:w-6" />
             </button>
@@ -58,13 +59,13 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
                 <span className="text-white font-bold text-sm sm:text-base">SMS</span>
               </div>
               <div className="hidden sm:block">
-                <h1 className="text-base sm:text-lg md:text-xl font-bold text-gray-800">
+                <h1 className="text-base sm:text-lg md:text-xl font-bold text-gray-800 dark:text-white transition-colors">
                   School Management System
                 </h1>
-                <p className="text-xs text-gray-500 hidden md:block">Manage • Track • Succeed</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 hidden md:block">Manage • Track • Succeed</p>
               </div>
               <div className="sm:hidden">
-                <h1 className="text-sm font-bold text-gray-800">SMS</h1>
+                <h1 className="text-sm font-bold text-gray-800 dark:text-white">SMS</h1>
               </div>
             </div>
           </div>
@@ -74,8 +75,11 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
 
           {/* Right section */}
           <div className="flex items-center gap-2 sm:gap-4">
+            {/* Theme Toggle - ADD THIS */}
+            <ThemeToggle />
+
             {/* Notifications */}
-            <button className="p-2 rounded-full text-gray-400 hover:text-gray-500 hover:bg-gray-100 relative">
+            <button className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 relative transition-colors">
               <BellIcon className="h-5 w-5 sm:h-6 sm:w-6" />
               <span className="absolute top-1.5 right-1.5 block h-2 w-2 rounded-full bg-red-500"></span>
             </button>
@@ -86,11 +90,11 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
                 <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center">
                   <span className="text-sm font-medium text-white">{getUserInitials()}</span>
                 </div>
-                <span className="text-sm font-medium text-gray-700">{getUserName()}</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors">{getUserName()}</span>
               </div>
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 rounded-lg transition-colors"
               >
                 <ArrowRightOnRectangleIcon className="h-4 w-4" />
                 <span>Logout</span>
@@ -101,7 +105,7 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
             <div className="flex md:hidden">
               <button
                 onClick={handleLogout}
-                className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 rounded-lg transition-colors"
                 title="Logout"
               >
                 <ArrowRightOnRectangleIcon className="h-5 w-5" />
