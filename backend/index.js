@@ -6498,7 +6498,7 @@ async function getMonthlyAttendanceSummary(classId) {
 }
 
 // ==================== MIGRATION ENDPOINT ====================
-// Migration endpoint - run this once to create ClassTeacherComment table
+// Migration endpoint - Fixed SQL syntax
 app.post('/api/migrate', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -6510,10 +6510,19 @@ app.post('/api/migrate', async (req, res) => {
       userId = decoded.split(':')[0];
     }
 
-    // Verify admin access
-    const admin = await prisma.user.findUnique({ where: { id: userId } });
-    if (admin?.email !== 'admin@school.com') {
-      return res.status(403).json({ error: 'Admin access required' });
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized - No user ID found' });
+    }
+
+    const admin = await prisma.user.findUnique({ 
+      where: { id: userId },
+      select: { id: true, email: true, role: true }
+    });
+
+    console.log('Migration attempt by:', admin?.email, 'Role:', admin?.role);
+
+    if (admin?.role !== 'ADMIN' && admin?.role !== 'PRINCIPAL') {
+      return res.status(403).json({ error: 'Admin or Principal access required' });
     }
 
     console.log('🚀 Running migration...');
@@ -6542,28 +6551,44 @@ app.post('/api/migrate', async (req, res) => {
     `);
     console.log('✅ ClassTeacherComment table created');
 
-    // Add unique constraint
+    // Add unique constraint (PostgreSQL doesn't support IF NOT EXISTS for constraints)
     await prisma.$executeRawUnsafe(`
-      ALTER TABLE "ClassTeacherComment" ADD CONSTRAINT IF NOT EXISTS "ClassTeacherComment_studentId_termId_type_key" UNIQUE ("studentId", "termId", "type");
+      DO $$ BEGIN
+        ALTER TABLE "ClassTeacherComment" ADD CONSTRAINT "ClassTeacherComment_studentId_termId_type_key" UNIQUE ("studentId", "termId", "type");
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
     `);
+    console.log('✅ Unique constraint added');
 
     // Add foreign key constraints
     await prisma.$executeRawUnsafe(`
-      ALTER TABLE "ClassTeacherComment" ADD CONSTRAINT IF NOT EXISTS "ClassTeacherComment_studentId_fkey" 
-        FOREIGN KEY ("studentId") REFERENCES "Student"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+      DO $$ BEGIN
+        ALTER TABLE "ClassTeacherComment" ADD CONSTRAINT "ClassTeacherComment_studentId_fkey" 
+          FOREIGN KEY ("studentId") REFERENCES "Student"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
     `);
+    console.log('✅ Student FK added');
 
     await prisma.$executeRawUnsafe(`
-      ALTER TABLE "ClassTeacherComment" ADD CONSTRAINT IF NOT EXISTS "ClassTeacherComment_termId_fkey" 
-        FOREIGN KEY ("termId") REFERENCES "Term"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+      DO $$ BEGIN
+        ALTER TABLE "ClassTeacherComment" ADD CONSTRAINT "ClassTeacherComment_termId_fkey" 
+          FOREIGN KEY ("termId") REFERENCES "Term"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
     `);
+    console.log('✅ Term FK added');
 
     console.log('🎉 Migration completed successfully!');
 
     res.json({ 
       success: true, 
       message: 'Migration completed successfully!',
-      timestamp: new Date().toISOString()
+      adminEmail: admin?.email,
+      adminRole: admin?.role
     });
   } catch (error) {
     console.error('Migration error:', error);
