@@ -5929,8 +5929,650 @@ app.delete('/api/parent/unlink-child/:studentId', async (req, res) => {
 //   }
 // });
 
+// ==================== CLASS TEACHER ATTENDANCE ENDPOINTS ====================
+
+// Get class teacher's class attendance for a specific date
+app.get('/api/class-teacher/attendance', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let userId = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
+    }
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { date } = req.query;
+    const targetDate = date ? new Date(date) : new Date();
+    targetDate.setHours(0, 0, 0, 0);
+    const nextDay = new Date(targetDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+
+    // Get teacher with their homeroom class
+    const teacher = await prisma.teacher.findFirst({
+      where: { userId },
+      include: {
+        classTaught: {
+          include: {
+            students: {
+              include: {
+                user: true
+              },
+              orderBy: {
+                user: { name: 'asc' }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!teacher || !teacher.classTaught) {
+      return res.status(404).json({ error: 'No class assigned to this teacher' });
+    }
+
+    // Get existing attendance for this date
+    const existingAttendance = await prisma.attendance.findMany({
+      where: {
+        classId: teacher.classTaught.id,
+        date: {
+          gte: targetDate,
+          lt: nextDay
+        }
+      }
+    });
+
+    const attendanceMap = {};
+    existingAttendance.forEach(a => {
+      attendanceMap[a.studentId] = a.status;
+    });
+
+    // Prepare attendance sheet
+    const attendanceSheet = teacher.classTaught.students.map(student => ({
+      studentId: student.id,
+      studentName: student.user?.name,
+      admissionNo: student.admissionNo,
+      status: attendanceMap[student.id] || 'PRESENT'
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        classId: teacher.classTaught.id,
+        className: teacher.classTaught.name,
+        date: targetDate,
+        students: attendanceSheet
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching attendance:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save/Update bulk attendance
+app.post('/api/class-teacher/attendance/bulk', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let userId = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
+    }
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { date, attendances, classId } = req.body;
+
+    // Verify teacher has access to this class
+    const teacher = await prisma.teacher.findFirst({
+      where: { userId, classTaughtId: classId }
+    });
+
+    if (!teacher) {
+      return res.status(403).json({ error: 'You are not the class teacher for this class' });
+    }
+
+    const targetDate = new Date(date);
+    targetDate.setHours(0, 0, 0, 0);
+
+    // Use transaction for bulk upsert
+    const results = await prisma.$transaction(
+      attendances.map(att =>
+        prisma.attendance.upsert({
+          where: {
+            studentId_date: {
+              studentId: att.studentId,
+              date: targetDate
+            }
+          },
+          update: { status: att.status },
+          create: {
+            date: targetDate,
+            status: att.status,
+            studentId: att.studentId,
+            classId: classId
+          }
+        })
+      )
+    );
+
+    res.json({
+      success: true,
+      message: `Attendance recorded for ${results.length} students`,
+      data: results
+    });
+  } catch (error) {
+    console.error('Error saving attendance:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== CLASS TEACHER REPORT CARD COMMENTS ====================
+
+// Get comments for a student in a specific term
+app.get('/api/class-teacher/comments/:studentId', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let userId = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
+    }
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { studentId } = req.params;
+    const { termId } = req.query;
+
+    // Verify teacher is class teacher of this student
+    const teacher = await prisma.teacher.findFirst({
+      where: { userId },
+      include: {
+        classTaught: {
+          include: {
+            students: {
+              where: { id: studentId }
+            }
+          }
+        }
+      }
+    });
+
+    if (!teacher || !teacher.classTaught || teacher.classTaught.students.length === 0) {
+      return res.status(403).json({ error: 'You do not have access to this student' });
+    }
+
+    const whereClause = { studentId };
+    if (termId) whereClause.termId = termId;
+
+    const comments = await prisma.classTeacherComment.findMany({
+      where: whereClause,
+      include: {
+        term: {
+          include: { session: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json({ success: true, data: comments });
+  } catch (error) {
+    console.error('Error fetching comments:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save/Update comment for a student
+app.post('/api/class-teacher/comments', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let userId = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
+    }
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { studentId, termId, comment, type } = req.body;
+
+    if (!studentId || !termId || !comment) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Verify teacher is class teacher of this student
+    const teacher = await prisma.teacher.findFirst({
+      where: { userId },
+      include: {
+        classTaught: {
+          include: {
+            students: {
+              where: { id: studentId }
+            }
+          }
+        }
+      }
+    });
+
+    if (!teacher || !teacher.classTaught || teacher.classTaught.students.length === 0) {
+      return res.status(403).json({ error: 'You do not have access to this student' });
+    }
+
+    const savedComment = await prisma.classTeacherComment.upsert({
+      where: {
+        studentId_termId_type: {
+          studentId,
+          termId,
+          type: type || 'GENERAL'
+        }
+      },
+      update: { comment, updatedAt: new Date() },
+      create: {
+        studentId,
+        termId,
+        comment,
+        type: type || 'GENERAL'
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Comment saved successfully',
+      data: savedComment
+    });
+  } catch (error) {
+    console.error('Error saving comment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all students with their performance summary for class teacher
+app.get('/api/class-teacher/students-performance', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let userId = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
+    }
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { termId } = req.query;
+
+    // Get teacher with their homeroom class
+    const teacher = await prisma.teacher.findFirst({
+      where: { userId },
+      include: {
+        classTaught: {
+          include: {
+            students: {
+              include: {
+                user: true,
+                grades: {
+                  where: termId ? { termId } : {},
+                  include: { subject: true }
+                },
+                attendances: true
+              },
+              orderBy: {
+                user: { name: 'asc' }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!teacher || !teacher.classTaught) {
+      return res.status(404).json({ error: 'No class assigned to this teacher' });
+    }
+
+    // Calculate performance for each student
+    const studentsPerformance = teacher.classTaught.students.map(student => {
+      const grades = student.grades;
+      const totalScore = grades.reduce((sum, g) => sum + (g.percentage || g.score), 0);
+      const averageScore = grades.length > 0 ? totalScore / grades.length : 0;
+      
+      const attendances = student.attendances;
+      const presentCount = attendances.filter(a => a.status === 'PRESENT').length;
+      const attendanceRate = attendances.length > 0 ? (presentCount / attendances.length) * 100 : 0;
+
+      // Get grade letter
+      let gradeLetter = 'F';
+      if (averageScore >= 70) gradeLetter = 'A';
+      else if (averageScore >= 60) gradeLetter = 'B';
+      else if (averageScore >= 50) gradeLetter = 'C';
+      else if (averageScore >= 45) gradeLetter = 'D';
+      else if (averageScore >= 40) gradeLetter = 'E';
+
+      return {
+        id: student.id,
+        name: student.user?.name,
+        admissionNo: student.admissionNo,
+        averageScore: averageScore.toFixed(1),
+        gradeLetter,
+        attendanceRate: attendanceRate.toFixed(1),
+        subjects: grades.map(g => ({
+          name: g.subject?.name,
+          score: g.score,
+          percentage: g.percentage,
+          gradeLetter: g.gradeLetter
+        }))
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        className: teacher.classTaught.name,
+        classId: teacher.classTaught.id,
+        totalStudents: studentsPerformance.length,
+        students: studentsPerformance
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching students performance:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get attendance history for class teacher's class
+app.get('/api/class-teacher/attendance-history', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let userId = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
+    }
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { startDate, endDate, month, year } = req.query;
+
+    // Get teacher with their homeroom class
+    const teacher = await prisma.teacher.findFirst({
+      where: { userId },
+      include: {
+        classTaught: {
+          include: {
+            students: {
+              include: {
+                user: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!teacher || !teacher.classTaught) {
+      return res.status(404).json({ error: 'No class assigned to this teacher' });
+    }
+
+    // Build date filter
+    let dateFilter = {};
+    if (startDate && endDate) {
+      dateFilter = {
+        gte: new Date(startDate),
+        lte: new Date(endDate)
+      };
+    } else if (month && year) {
+      const start = new Date(year, month - 1, 1);
+      const end = new Date(year, month, 0);
+      dateFilter = {
+        gte: start,
+        lte: end
+      };
+    } else {
+      // Default to current month
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      dateFilter = {
+        gte: start,
+        lte: end
+      };
+    }
+
+    // Get all attendance records for this class
+    const attendances = await prisma.attendance.findMany({
+      where: {
+        classId: teacher.classTaught.id,
+        date: dateFilter
+      },
+      include: {
+        student: {
+          include: {
+            user: true
+          }
+        }
+      },
+      orderBy: [
+        { date: 'desc' },
+        { student: { user: { name: 'asc' } } }
+      ]
+    });
+
+    // Group attendance by date
+    const attendanceByDate = {};
+    attendances.forEach(att => {
+      const dateKey = att.date.toISOString().split('T')[0];
+      if (!attendanceByDate[dateKey]) {
+        attendanceByDate[dateKey] = {
+          date: dateKey,
+          records: []
+        };
+      }
+      attendanceByDate[dateKey].records.push({
+        studentId: att.studentId,
+        studentName: att.student.user?.name,
+        admissionNo: att.student.admissionNo,
+        status: att.status
+      });
+    });
+
+    // Calculate summary statistics
+    const totalStudents = teacher.classTaught.students.length;
+    const summary = {
+      totalDays: Object.keys(attendanceByDate).length,
+      averageAttendance: 0,
+      studentStats: {}
+    };
+
+    // Calculate per-student attendance statistics
+    teacher.classTaught.students.forEach(student => {
+      const studentAttendances = attendances.filter(a => a.studentId === student.id);
+      const presentCount = studentAttendances.filter(a => a.status === 'PRESENT').length;
+      const absentCount = studentAttendances.filter(a => a.status === 'ABSENT').length;
+      const lateCount = studentAttendances.filter(a => a.status === 'LATE').length;
+      const attendanceRate = studentAttendances.length > 0 
+        ? (presentCount / studentAttendances.length) * 100 
+        : 0;
+
+      summary.studentStats[student.id] = {
+        name: student.user?.name,
+        admissionNo: student.admissionNo,
+        present: presentCount,
+        absent: absentCount,
+        late: lateCount,
+        totalDays: studentAttendances.length,
+        attendanceRate: attendanceRate.toFixed(1)
+      };
+    });
+
+    // Calculate overall average attendance
+    const totalAttendanceRate = Object.values(summary.studentStats).reduce((sum, s) => 
+      sum + parseFloat(s.attendanceRate), 0);
+    summary.averageAttendance = totalStudents > 0 
+      ? (totalAttendanceRate / totalStudents).toFixed(1) 
+      : 0;
+
+    res.json({
+      success: true,
+      data: {
+        className: teacher.classTaught.name,
+        classId: teacher.classTaught.id,
+        totalStudents,
+        summary,
+        attendanceByDate: Object.values(attendanceByDate).sort((a, b) => b.date.localeCompare(a.date)),
+        monthlySummary: await getMonthlyAttendanceSummary(teacher.classTaught.id)
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching attendance history:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper function to get monthly attendance summary
+async function getMonthlyAttendanceSummary(classId) {
+  const monthlyData = [];
+  const now = new Date();
+  
+  for (let i = 0; i < 6; i++) {
+    const month = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const monthStart = new Date(month.getFullYear(), month.getMonth(), 1);
+    const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 0);
+    
+    const attendances = await prisma.attendance.findMany({
+      where: {
+        classId,
+        date: {
+          gte: monthStart,
+          lte: monthEnd
+        }
+      },
+      include: {
+        student: true
+      }
+    });
+    
+    const uniqueDays = [...new Set(attendances.map(a => a.date.toISOString().split('T')[0]))];
+    const totalPresent = attendances.filter(a => a.status === 'PRESENT').length;
+    const totalLate = attendances.filter(a => a.status === 'LATE').length;
+    const totalAbsent = attendances.filter(a => a.status === 'ABSENT').length;
+    const totalRecords = attendances.length;
+    
+    monthlyData.push({
+      month: month.toLocaleString('default', { month: 'long', year: 'numeric' }),
+      monthIndex: month.getMonth(),
+      year: month.getFullYear(),
+      days: uniqueDays.length,
+      present: totalPresent,
+      late: totalLate,
+      absent: totalAbsent,
+      total: totalRecords,
+      attendanceRate: totalRecords > 0 ? ((totalPresent / totalRecords) * 100).toFixed(1) : 0
+    });
+  }
+  
+  return monthlyData;
+}
+
+// ==================== MIGRATION ENDPOINT ====================
+// Migration endpoint - run this once to create ClassTeacherComment table
+app.post('/api/migrate', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let userId = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
+    }
+
+    // Verify admin access
+    const admin = await prisma.user.findUnique({ where: { id: userId } });
+    if (admin?.email !== 'admin@school.com') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    console.log('🚀 Running migration...');
+
+    // Create enum
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        CREATE TYPE "CommentType" AS ENUM ('GENERAL', 'STRENGTH', 'WEAKNESS', 'TEACHER_RECOMMENDATION', 'PRINCIPAL_REMARK');
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
+    `);
+    console.log('✅ CommentType enum created');
+
+    // Create table
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "ClassTeacherComment" (
+        "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        "studentId" TEXT NOT NULL,
+        "termId" TEXT NOT NULL,
+        "comment" TEXT NOT NULL,
+        "type" "CommentType" NOT NULL DEFAULT 'GENERAL',
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log('✅ ClassTeacherComment table created');
+
+    // Add unique constraint
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "ClassTeacherComment" ADD CONSTRAINT IF NOT EXISTS "ClassTeacherComment_studentId_termId_type_key" UNIQUE ("studentId", "termId", "type");
+    `);
+
+    // Add foreign key constraints
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "ClassTeacherComment" ADD CONSTRAINT IF NOT EXISTS "ClassTeacherComment_studentId_fkey" 
+        FOREIGN KEY ("studentId") REFERENCES "Student"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "ClassTeacherComment" ADD CONSTRAINT IF NOT EXISTS "ClassTeacherComment_termId_fkey" 
+        FOREIGN KEY ("termId") REFERENCES "Term"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+    `);
+
+    console.log('🎉 Migration completed successfully!');
+
+    res.json({ 
+      success: true, 
+      message: 'Migration completed successfully!',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Migration error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==================== STATIC FILE SERVING (FRONTEND) ====================
-// Serve frontend static files - MUST be before API routes
+// Serve frontend static files - MUST be AFTER API routes (so API routes take precedence)
 app.use(express.static("public"));
 
 // Handle React Router - serve index.html for all non-API routes
@@ -5985,6 +6627,24 @@ const server = app.listen(port, () => {
   console.log(`     GET    /api/dashboard/class-teacher`);
   console.log(`     GET    /api/class-teacher/students`);
   console.log(`     GET    /api/class-teacher/attendance-summary`);
+  console.log(`     GET    /api/class-teacher/attendance-history (date range/monthly)`);
+  console.log(`     GET    /api/class-teacher/attendance (by date)`);
+  console.log(`     POST   /api/class-teacher/attendance/bulk (save attendance)`);
+  console.log(`     GET    /api/class-teacher/comments/:studentId (report card comments)`);
+  console.log(`     POST   /api/class-teacher/comments (save comment)`);
+  console.log(`     GET    /api/class-teacher/students-performance (performance summary)`);
+  console.log(`     POST   /api/migrate (create ClassTeacherComment table - admin only)`);
+  console.log(`     GET    /api/class-teacher/attendance-history (date range/monthly)`);
+  console.log(`     GET    /api/class-teacher/attendance (by date)`);
+  console.log(`     POST   /api/class-teacher/attendance/bulk (save attendance)`);
+  console.log(`     GET    /api/class-teacher/comments/:studentId (report card comments)`);
+  console.log(`     POST   /api/class-teacher/comments (save comment)`);
+  console.log(`     GET    /api/class-teacher/students-performance (performance summary)`);
+  console.log(`     GET    /api/class-teacher/attendance (by date)`);
+  console.log(`     POST   /api/class-teacher/attendance/bulk (save attendance)`);
+  console.log(`     GET    /api/class-teacher/comments/:studentId (report card comments)`);
+  console.log(`     POST   /api/class-teacher/comments (save comment)`);
+  console.log(`     GET    /api/class-teacher/students-performance (performance summary)`);
   console.log(`   🎓 STUDENTS`);
   console.log(`     GET    /api/students`);
   console.log(`     GET    /api/students/:id`);
