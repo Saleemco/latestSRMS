@@ -2,7 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from "./context/AuthContext";
 import { TermProvider } from "./context/TermContext";
-import { ThemeProvider } from "./context/ThemeContext"; // ADD THIS
+import { ThemeProvider } from "./context/ThemeContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Layout } from "./components/Layout";
 import Login from "./pages/Login";
@@ -24,6 +24,9 @@ import ParentReportCard from "./pages/ParentReportCard";
 import { ClassTeacherDashboard } from "./components/dashboards/ClassTeacherDashboard";
 import ClassTeacherStudents from "./pages/ClassTeacherStudents";
 import Parents from "./pages/Parents";
+import { ClassTeacherAttendance } from "./pages/ClassTeacherAttendance";
+import { AttendanceHistory } from "./pages/AttendanceHistory";
+import { ClassTeacherComments } from "./pages/ClassTeacherComments";
 
 const queryClient = new QueryClient();
 
@@ -31,7 +34,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <Router>
-        <ThemeProvider> {/* ADD THIS */}
+        <ThemeProvider>
           <AuthProvider>
             <TermProvider>
               <Routes>
@@ -54,6 +57,25 @@ function App() {
                   <Route path="class-teacher/students" element={
                     <ProtectedRoute allowedRoles={['CLASS_TEACHER']}>
                       <ClassTeacherStudents />
+                    </ProtectedRoute>
+                  } />
+                  
+                  {/* NEW CLASS TEACHER ROUTES */}
+                  <Route path="class-teacher/attendance" element={
+                    <ProtectedRoute allowedRoles={['CLASS_TEACHER']}>
+                      <ClassTeacherAttendance />
+                    </ProtectedRoute>
+                  } />
+                  
+                  <Route path="attendance-history" element={
+                    <ProtectedRoute allowedRoles={['CLASS_TEACHER']}>
+                      <AttendanceHistory />
+                    </ProtectedRoute>
+                  } />
+                  
+                  <Route path="class-teacher/comments" element={
+                    <ProtectedRoute allowedRoles={['CLASS_TEACHER']}>
+                      <ClassTeacherComments />
                     </ProtectedRoute>
                   } />
                   
@@ -113,7 +135,7 @@ function App() {
               </Routes>
             </TermProvider>
           </AuthProvider>
-        </ThemeProvider> {/* ADD THIS */}
+        </ThemeProvider>
       </Router>
     </QueryClientProvider>
   );

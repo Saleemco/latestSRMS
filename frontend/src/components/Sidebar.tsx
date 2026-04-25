@@ -14,6 +14,8 @@ import {
     DocumentTextIcon,
     UserGroupIcon,
     CalendarIcon,
+    CheckCircleIcon,
+    ClockIcon,
 } from "@heroicons/react/24/outline";
 
 interface SidebarProps {
@@ -76,6 +78,13 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
             items.push({ name: "Fees", href: "/fees", icon: CurrencyDollarIcon });
         } else if (user?.role === "PARENT") {
             items.push({ name: "Fees", href: "/parent-fees", icon: CurrencyDollarIcon });
+        }
+
+        // CLASS TEACHER SPECIFIC FEATURES
+        if (user?.role === "CLASS_TEACHER") {
+            items.push({ name: "Take Attendance", href: "/class-teacher/attendance", icon: CheckCircleIcon });
+            items.push({ name: "Attendance History", href: "/attendance-history", icon: ClockIcon });
+            items.push({ name: "Add Comments", href: "/class-teacher/comments", icon: DocumentTextIcon });
         }
 
         // Sessions - only Admin/Principal
