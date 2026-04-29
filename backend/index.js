@@ -1,4 +1,11 @@
-﻿const express = require('express');
+﻿// backend/index.js
+// 1. Require the instrumentation file FIRST
+require("./instrument");
+
+// 2. Your normal imports
+const Sentry = require("@sentry/node"); // Import Sentry
+
+const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const cors = require('cors');
 const multer = require('multer');
@@ -6594,6 +6601,17 @@ app.post('/api/migrate', async (req, res) => {
     console.error('Migration error:', error);
     res.status(500).json({ error: error.message });
   }
+});
+
+// ==================== SENTRY ERROR HANDLER ====================
+// 3. AFTER all your routes, add the Sentry error handler
+// This will catch errors from your routes automatically
+Sentry.setupExpressErrorHandler(app);
+
+// 4. Your regular error handler (optional, but good to keep)
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).send('Something broke!');
 });
 
 // ==================== STATIC FILE SERVING (FRONTEND) ====================
