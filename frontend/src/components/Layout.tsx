@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { TermProvider } from "../context/TermContext";
+import { TestSentryButton } from "./TestSentryButton";
 
 export const Layout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -28,6 +29,8 @@ export const Layout = () => {
             </div>
           </main>
         </div>
+        {/* Test Sentry Button - shows on all pages */}
+        <TestSentryButton />
       </div>
     </TermProvider>
   );
