@@ -1,9 +1,6 @@
 ﻿// backend/index.js
-// 1. Require the instrumentation file FIRST
+// IMPORTANT: This MUST be the first line
 require("./instrument");
-
-// 2. Your normal imports
-const Sentry = require("@sentry/node"); // Import Sentry
 
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
@@ -6603,15 +6600,40 @@ app.post('/api/migrate', async (req, res) => {
   }
 });
 
-// ==================== SENTRY ERROR HANDLER ====================
-// 3. AFTER all your routes, add the Sentry error handler
-// This will catch errors from your routes automatically
+
+// ==================== TEST SENTRY ENDPOINT ====================
+// This endpoint is for testing Sentry error tracking
+// You can remove it after confirming Sentry works
+app.get('/api/test-sentry', (req, res) => {
+  try {
+    // Intentionally throw an error to test Sentry
+    throw new Error('🧪 Test error from backend! Check your Sentry dashboard.');
+  } catch (error) {
+    // Capture the error with Sentry
+    Sentry.captureException(error);
+    // Send response to the client
+    res.status(500).json({ 
+      message: 'Test error sent to Sentry! Check your dashboard.',
+      error: error.message 
+    });
+  }
+});
+
+
+// ==================== SENTRY ERROR HANDLING ====================
+// This must be after ALL your routes
+const Sentry = require("@sentry/node");
 Sentry.setupExpressErrorHandler(app);
 
-// 4. Your regular error handler (optional, but good to keep)
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).send('Something broke!');
+// Optional fallthrough error handler
+app.use(function onError(err, req, res, next) {
+  console.error('❌ Error:', err.message);
+  res.statusCode = 500;
+  res.json({ 
+    error: 'Internal Server Error',
+    message: process.env.NODE_ENV === 'production' ? 'Something went wrong' : err.message,
+    errorId: res.sentry 
+  });
 });
 
 // ==================== STATIC FILE SERVING (FRONTEND) ====================
