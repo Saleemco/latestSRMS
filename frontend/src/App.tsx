@@ -27,6 +27,7 @@ import Parents from "./pages/Parents";
 import { ClassTeacherAttendance } from "./pages/ClassTeacherAttendance";
 import { AttendanceHistory } from "./pages/AttendanceHistory";
 import { ClassTeacherComments } from "./pages/ClassTeacherComments";
+import { ClassTeacherPerformance } from "./pages/ClassTeacherPerformance";
 
 const queryClient = new QueryClient();
 
@@ -48,19 +49,20 @@ function App() {
                   <Route index element={<Navigate to="/dashboard" replace />} />
                   <Route path="dashboard" element={<Dashboard />} />
                   
+                  {/* Class Teacher Dashboard */}
                   <Route path="dashboard/class-teacher" element={
                     <ProtectedRoute allowedRoles={['TEACHER', 'CLASS_TEACHER', 'ADMIN', 'PRINCIPAL']}>
                       <ClassTeacherDashboard />
                     </ProtectedRoute>
                   } />
                   
+                  {/* Class Teacher Routes */}
                   <Route path="class-teacher/students" element={
                     <ProtectedRoute allowedRoles={['CLASS_TEACHER']}>
                       <ClassTeacherStudents />
                     </ProtectedRoute>
                   } />
                   
-                  {/* NEW CLASS TEACHER ROUTES */}
                   <Route path="class-teacher/attendance" element={
                     <ProtectedRoute allowedRoles={['CLASS_TEACHER']}>
                       <ClassTeacherAttendance />
@@ -79,6 +81,13 @@ function App() {
                     </ProtectedRoute>
                   } />
                   
+                  <Route path="class-teacher/performance" element={
+                    <ProtectedRoute allowedRoles={['CLASS_TEACHER']}>
+                      <ClassTeacherPerformance />
+                    </ProtectedRoute>
+                  } />
+                  
+                  {/* General Routes */}
                   <Route path="students" element={<Students />} />
                   <Route path="teachers" element={<Teachers />} />
                   <Route path="parents" element={<Parents />} />
@@ -86,12 +95,14 @@ function App() {
                   <Route path="subjects" element={<Subjects />} />
                   <Route path="results" element={<Results />} />
                   
+                  {/* Teacher Results */}
                   <Route path="teacher-results" element={
                     <ProtectedRoute allowedRoles={['TEACHER', 'CLASS_TEACHER', 'ADMIN', 'PRINCIPAL']}>
                       <TeacherResults />
                     </ProtectedRoute>
                   } />
                   
+                  {/* Report Card Routes */}
                   <Route path="teacher/report-card" element={
                     <ProtectedRoute allowedRoles={['TEACHER', 'CLASS_TEACHER', 'ADMIN', 'PRINCIPAL']}>
                       <ReportCard />
@@ -104,6 +115,7 @@ function App() {
                     </ProtectedRoute>
                   } />
                   
+                  {/* Fee Routes */}
                   <Route path="fees" element={<Fees />} />
                   
                   <Route path="parent-fees" element={
@@ -112,6 +124,7 @@ function App() {
                     </ProtectedRoute>
                   } />
                   
+                  {/* Admin Routes */}
                   <Route path="admin/terms" element={
                     <ProtectedRoute allowedRoles={['ADMIN', 'PRINCIPAL']}>
                       <TermManagement />
