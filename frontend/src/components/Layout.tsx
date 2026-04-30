@@ -4,7 +4,6 @@ import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { TermProvider } from "../context/TermContext";
 
-
 export const Layout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
@@ -29,8 +28,6 @@ export const Layout = () => {
             </div>
           </main>
         </div>
-        {/* Test Sentry Button - shows on all pages */}
-        <TestSentryButton />
       </div>
     </TermProvider>
   );
