@@ -6601,23 +6601,6 @@ app.post('/api/migrate', async (req, res) => {
 });
 
 
-// ==================== TEST SENTRY ENDPOINT ====================
-// This endpoint is for testing Sentry error tracking
-// You can remove it after confirming Sentry works
-app.get('/api/test-sentry', (req, res) => {
-  try {
-    // Intentionally throw an error to test Sentry
-    throw new Error('🧪 Test error from backend! Check your Sentry dashboard.');
-  } catch (error) {
-    // Capture the error with Sentry
-    Sentry.captureException(error);
-    // Send response to the client
-    res.status(500).json({ 
-      message: 'Test error sent to Sentry! Check your dashboard.',
-      error: error.message 
-    });
-  }
-});
 
 
 // ==================== SENTRY ERROR HANDLING ====================
