@@ -52,4 +52,4 @@ async function checkJSS1Students() {
   await prisma.$disconnect();
 }
 
-checkJSS1Students();
+checkJSS1Students(); 
