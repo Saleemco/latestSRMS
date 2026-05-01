@@ -16,6 +16,7 @@ import {
     CalendarIcon,
     CheckCircleIcon,
     ClockIcon,
+    ChatBubbleLeftRightIcon,
 } from "@heroicons/react/24/outline";
 
 interface SidebarProps {
@@ -35,7 +36,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
 
         // Students - different for Class Teachers vs others
         if (user?.role === "CLASS_TEACHER") {
-            items.push({ name: "Students", href: "/class-teacher/students", icon: UsersIcon });
+            items.push({ name: "My Students", href: "/class-teacher/students", icon: UsersIcon });
         } else if (user?.role === "TEACHER" || user?.role === "ADMIN" || user?.role === "PRINCIPAL") {
             items.push({ name: "Students", href: "/students", icon: UsersIcon });
         }
@@ -62,7 +63,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
 
         // Results - Admin, Principal, Teacher, Class Teacher
         if (user?.role === "ADMIN" || user?.role === "PRINCIPAL" || user?.role === "TEACHER" || user?.role === "CLASS_TEACHER") {
-            items.push({ name: "Results", href: "/teacher-results", icon: ChartBarIcon });
+            items.push({ name: "Enter Results", href: "/teacher-results", icon: ChartBarIcon });
         }
 
         // Report Card - everyone except Bursar
@@ -84,8 +85,8 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
         if (user?.role === "CLASS_TEACHER") {
             items.push({ name: "Take Attendance", href: "/class-teacher/attendance", icon: CheckCircleIcon });
             items.push({ name: "Attendance History", href: "/attendance-history", icon: ClockIcon });
-            items.push({ name: "Add Comments", href: "/class-teacher/comments", icon: DocumentTextIcon });
-            items.push({ name: "Student Performance", href: "/class-teacher/performance", icon: ChartBarIcon }); // ADD THIS LINE
+            items.push({ name: "Add Comments", href: "/class-teacher/comments", icon: ChatBubbleLeftRightIcon });
+            items.push({ name: "Student Performance", href: "/class-teacher/performance", icon: ChartBarIcon });
         }
 
         // Sessions - only Admin/Principal
