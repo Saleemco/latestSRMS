@@ -1,7 +1,7 @@
 ﻿import { Fragment, useMemo } from "react";
 import { Dialog, Transition } from "@headlessui/react";
 import { XMarkIcon } from "@heroicons/react/24/outline";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
     HomeIcon,
@@ -25,22 +25,18 @@ interface SidebarProps {
 }
 
 export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
-    const { user } = useAuth();
-    const location = useLocation();
-    const isClassTeacherRoute = location.pathname.startsWith('/class-teacher');
+    const { user, isClassTeacher } = useAuth();
 
     // Build navigation items dynamically based on user role
-    const hasClassTeacherAccess = user?.role === "CLASS_TEACHER" || isClassTeacherRoute;
+    const hasClassTeacherAccess = user?.role === "CLASS_TEACHER" || isClassTeacher === true;
     const navigationItems = useMemo(() => {
         const items = [];
 
         // Dashboard - everyone sees this
         items.push({ name: "Dashboard", href: "/dashboard", icon: HomeIcon });
 
-        // Students - different for Class Teachers vs others
-        if (hasClassTeacherAccess) {
-            items.push({ name: "My Students", href: "/class-teacher/students", icon: UsersIcon });
-        } else if (user?.role === "TEACHER" || user?.role === "ADMIN" || user?.role === "PRINCIPAL") {
+        // Students - regular teacher view (all students they teach)
+        if (user?.role === "TEACHER" || user?.role === "ADMIN" || user?.role === "PRINCIPAL") {
             items.push({ name: "Students", href: "/students", icon: UsersIcon });
         }
 
@@ -59,13 +55,13 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
             items.push({ name: "Classes", href: "/classes", icon: AcademicCapIcon });
         }
 
-        // Subjects - Admin, Principal, Teacher, Class Teacher
-        if (user?.role === "ADMIN" || user?.role === "PRINCIPAL" || user?.role === "TEACHER" || hasClassTeacherAccess) {
+        // Subjects - Admin, Principal, Teacher
+        if (user?.role === "ADMIN" || user?.role === "PRINCIPAL" || user?.role === "TEACHER") {
             items.push({ name: "Subjects", href: "/subjects", icon: BookOpenIcon });
         }
 
-        // Results - Admin, Principal, Teacher, Class Teacher
-        if (user?.role === "ADMIN" || user?.role === "PRINCIPAL" || user?.role === "TEACHER" || hasClassTeacherAccess) {
+        // Results - Admin, Principal, Teacher
+        if (user?.role === "ADMIN" || user?.role === "PRINCIPAL" || user?.role === "TEACHER") {
             items.push({ name: "Enter Results", href: "/teacher-results", icon: ChartBarIcon });
         }
 
@@ -84,8 +80,16 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
             items.push({ name: "Fees", href: "/parent-fees", icon: CurrencyDollarIcon });
         }
 
-        // CLASS TEACHER SPECIFIC FEATURES
+        // CLASS TEACHER SPECIFIC FEATURES (shown in addition to regular teacher menu)
         if (hasClassTeacherAccess) {
+            // Visual separator
+            items.push({ 
+                name: "Class Teacher", 
+                href: "#", 
+                icon: AcademicCapIcon,
+                isSeparator: true 
+            });
+            items.push({ name: "My Students", href: "/class-teacher/students", icon: UsersIcon });
             items.push({ name: "Take Attendance", href: "/class-teacher/attendance", icon: CheckCircleIcon });
             items.push({ name: "Attendance History", href: "/attendance-history", icon: ClockIcon });
             items.push({ name: "Add Comments", href: "/class-teacher/comments", icon: ChatBubbleLeftRightIcon });
@@ -113,7 +117,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
         }
 
         return items;
-    }, [user?.role]);
+    }, [user?.role, isClassTeacher]);
 
     return (
         <>
@@ -188,18 +192,25 @@ const SidebarContent = ({ navigation }: { navigation: any[] }) => (
                     <ul role="list" className="-mx-2 space-y-1">
                         {navigation.map((item) => (
                             <li key={item.name}>
-                                <NavLink
-                                    to={item.href}
-                                    className={({ isActive }) => {
-                                        return 'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold transition-colors ' +
-                                            (isActive 
-                                                ? 'bg-gray-50 dark:bg-gray-800 text-indigo-600 dark:text-indigo-400' 
-                                                : 'text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-gray-50 dark:hover:bg-gray-800');
-                                    }}
-                                >
-                                    <item.icon className="h-6 w-6 shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" aria-hidden="true" />
-                                    {item.name}
-                                </NavLink>
+                                {item.isSeparator ? (
+                                    <div className="flex items-center gap-x-3 px-2 py-3 text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mt-4 border-t border-gray-200 dark:border-gray-700">
+                                        <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                                        {item.name}
+                                    </div>
+                                ) : (
+                                    <NavLink
+                                        to={item.href}
+                                        className={({ isActive }) => {
+                                            return 'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold transition-colors ' +
+                                                (isActive 
+                                                    ? 'bg-gray-50 dark:bg-gray-800 text-indigo-600 dark:text-indigo-400' 
+                                                    : 'text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-gray-50 dark:hover:bg-gray-800');
+                                        }}
+                                    >
+                                        <item.icon className="h-6 w-6 shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" aria-hidden="true" />
+                                        {item.name}
+                                    </NavLink>
+                                )}
                             </li>
                         ))}
                     </ul>

@@ -257,6 +257,17 @@ export const dashboardService = {
       return false;
     }
   },
+
+  // Get class teacher status (lightweight check)
+  getClassTeacherStatus: async () => {
+    try {
+      const response = await api.get('/teachers/me/class-teacher-status');
+      return response.data;
+    } catch (error) {
+      console.error('Error checking class teacher status:', error);
+      return { data: { isClassTeacher: false } };
+    }
+  },
 };
 
 export default dashboardService;

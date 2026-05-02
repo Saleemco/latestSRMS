@@ -351,25 +351,12 @@ app.get('/api/classes', async (req, res) => {
             user: true
           }
         },
-        subjects: {
-          include: {
-            subject: {
-              include: {
-                teacher: {
-                  include: {
-                    user: true
-                  }
-                }
-              }
-            }
-          }
-        },
         _count: {
-          select: { students: true, subjects: true }
+          select: { students: true }
         }
       }
     });
-
+    
     // Transform the data to include class teacher information
     const transformedClasses = classes.map(cls => ({
       id: cls.id,
@@ -389,24 +376,14 @@ app.get('/api/classes', async (req, res) => {
         name: cls.classTeacher.user?.name,
         email: cls.classTeacher.user?.email
       } : null,
-      subjects: cls.subjects?.map(sc => ({
-        id: sc.subject.id,
-        name: sc.subject.name,
-        code: sc.subject.code,
-        teacher: sc.subject.teacher ? {
-          id: sc.subject.teacher.id,
-          name: sc.subject.teacher.user?.name,
-          email: sc.subject.teacher.user?.email
-        } : null
-      })) || [],
       _count: cls._count,
       createdAt: cls.createdAt,
       updatedAt: cls.updatedAt
     }));
-
+    
     console.log(`✅ Found ${transformedClasses.length} classes`);
     console.log('📊 Classes with class teachers:', transformedClasses.filter(c => c.classTeacher).length);
-
+    
     res.json(transformedClasses);
   } catch (error) {
     console.error('❌ Error fetching classes:', error);
@@ -758,6 +735,70 @@ app.get('/api/teachers/user/:userId', async (req, res) => {
   }
 });
 
+// Check if current teacher is a class teacher (lightweight)
+app.get('/api/teachers/me/class-teacher-status', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let userId = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
+    }
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const teacher = await prisma.teacher.findFirst({
+      where: { userId },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true, role: true }
+        },
+        classTaught: {
+          select: {
+            id: true,
+            name: true,
+            grade: true,
+            _count: {
+              select: { students: true, subjects: true }
+            }
+          }
+        }
+      }
+    });
+
+    if (!teacher) {
+      return res.status(404).json({ error: 'Teacher not found' });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        isClassTeacher: !!teacher.classTaught,
+        teacherId: teacher.id,
+        userId: teacher.userId,
+        name: teacher.user?.name,
+        role: teacher.user?.role,
+        class: teacher.classTaught ? {
+          id: teacher.classTaught.id,
+          name: teacher.classTaught.name,
+          grade: teacher.classTaught.grade,
+          studentCount: teacher.classTaught._count.students,
+          subjectCount: teacher.classTaught._count.subjects
+        } : null
+      }
+    });
+
+  } catch (error) {
+    console.error('Error checking class teacher status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 5. Create teacher
 // 5. Create teacher
 app.post('/api/teachers', async (req, res) => {
   try {
