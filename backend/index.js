@@ -351,12 +351,25 @@ app.get('/api/classes', async (req, res) => {
             user: true
           }
         },
+        subjects: {
+          include: {
+            subject: {
+              include: {
+                teacher: {
+                  include: {
+                    user: true
+                  }
+                }
+              }
+            }
+          }
+        },
         _count: {
-          select: { students: true }
+          select: { students: true, subjects: true }
         }
       }
     });
-    
+
     // Transform the data to include class teacher information
     const transformedClasses = classes.map(cls => ({
       id: cls.id,
@@ -376,14 +389,24 @@ app.get('/api/classes', async (req, res) => {
         name: cls.classTeacher.user?.name,
         email: cls.classTeacher.user?.email
       } : null,
+      subjects: cls.subjects?.map(sc => ({
+        id: sc.subject.id,
+        name: sc.subject.name,
+        code: sc.subject.code,
+        teacher: sc.subject.teacher ? {
+          id: sc.subject.teacher.id,
+          name: sc.subject.teacher.user?.name,
+          email: sc.subject.teacher.user?.email
+        } : null
+      })) || [],
       _count: cls._count,
       createdAt: cls.createdAt,
       updatedAt: cls.updatedAt
     }));
-    
+
     console.log(`✅ Found ${transformedClasses.length} classes`);
     console.log('📊 Classes with class teachers:', transformedClasses.filter(c => c.classTeacher).length);
-    
+
     res.json(transformedClasses);
   } catch (error) {
     console.error('❌ Error fetching classes:', error);
