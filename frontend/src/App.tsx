@@ -51,38 +51,38 @@ function App() {
                   
                   {/* Class Teacher Dashboard */}
                   <Route path="dashboard/class-teacher" element={
-                    <ProtectedRoute allowedRoles={['TEACHER', 'CLASS_TEACHER', 'ADMIN', 'PRINCIPAL']}>
+                    <ProtectedRoute allowedRoles={['TEACHER', 'CLASS_TEACHER', 'ADMIN', 'PRINCIPAL']} requireClassTeacher={true}>
                       <ClassTeacherDashboard />
                     </ProtectedRoute>
                   } />
                   
                   {/* Class Teacher Routes */}
                   <Route path="class-teacher/students" element={
-                    <ProtectedRoute allowedRoles={['CLASS_TEACHER']}>
+                    <ProtectedRoute allowedRoles={['TEACHER', 'CLASS_TEACHER', 'ADMIN', 'PRINCIPAL']} requireClassTeacher={true}>
                       <ClassTeacherStudents />
                     </ProtectedRoute>
                   } />
                   
                   <Route path="class-teacher/attendance" element={
-                    <ProtectedRoute allowedRoles={['CLASS_TEACHER']}>
+                    <ProtectedRoute allowedRoles={['TEACHER', 'CLASS_TEACHER', 'ADMIN', 'PRINCIPAL']} requireClassTeacher={true}>
                       <ClassTeacherAttendance />
                     </ProtectedRoute>
                   } />
                   
                   <Route path="attendance-history" element={
-                    <ProtectedRoute allowedRoles={['CLASS_TEACHER']}>
+                    <ProtectedRoute allowedRoles={['TEACHER', 'CLASS_TEACHER', 'ADMIN', 'PRINCIPAL']} requireClassTeacher={true}>
                       <AttendanceHistory />
                     </ProtectedRoute>
                   } />
                   
                   <Route path="class-teacher/comments" element={
-                    <ProtectedRoute allowedRoles={['CLASS_TEACHER']}>
+                    <ProtectedRoute allowedRoles={['TEACHER', 'CLASS_TEACHER', 'ADMIN', 'PRINCIPAL']} requireClassTeacher={true}>
                       <ClassTeacherComments />
                     </ProtectedRoute>
                   } />
                   
                   <Route path="class-teacher/performance" element={
-                    <ProtectedRoute allowedRoles={['CLASS_TEACHER']}>
+                    <ProtectedRoute allowedRoles={['TEACHER', 'CLASS_TEACHER', 'ADMIN', 'PRINCIPAL']} requireClassTeacher={true}>
                       <ClassTeacherPerformance />
                     </ProtectedRoute>
                   } />
