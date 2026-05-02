@@ -84,7 +84,7 @@ export const dashboardService = {
   },
 
   // ==================== CLASS TEACHER METHODS ====================
-  
+
   // Get class teacher dashboard
   getClassTeacherDashboard: async () => {
     const response = await api.get('/dashboard/class-teacher');
@@ -142,7 +142,7 @@ export const dashboardService = {
   },
 
   // ==================== ADMIN CLASS TEACHER ASSIGNMENT METHODS ====================
-  
+
   // Get available teachers for class teacher assignment
   getAvailableTeachers: async () => {
     try {
@@ -241,28 +241,44 @@ export const dashboardService = {
   },
 
   // ==================== TEACHER PORTAL METHODS ====================
-  
+
   // Get unified teacher portal (shows both class teacher and subject teacher roles)
   getTeacherPortal: async () => {
     const response = await api.get('/teacher/portal');
     return response.data.data;
   },
 
-  // Check if current teacher is a class teacher
+  // Check if current teacher is a class teacher (uses existing /dashboard/class-teacher endpoint)
   isClassTeacher: async () => {
     try {
       const response = await api.get('/dashboard/class-teacher');
-      return response.data.data?.class !== null && response.data.data?.class !== undefined;
+      return response.data.data?.hasClass === true;
     } catch (error) {
       return false;
     }
   },
 
-  // Get class teacher status (lightweight check)
+  // Get class teacher status (uses existing /dashboard/class-teacher endpoint since new endpoint not deployed)
   getClassTeacherStatus: async () => {
     try {
-      const response = await api.get('/teachers/me/class-teacher-status');
-      return response.data;
+      const response = await api.get('/dashboard/class-teacher');
+      const data = response.data?.data;
+      return {
+        data: {
+          isClassTeacher: data?.hasClass === true,
+          teacherId: data?.teacher?.id,
+          userId: data?.teacher?.userId,
+          name: data?.teacher?.name,
+          role: data?.teacher?.role,
+          class: data?.class ? {
+            id: data.class.id,
+            name: data.class.name,
+            grade: data.class.grade,
+            studentCount: data.class.totalStudents,
+            subjectCount: data.class.subjects?.length || 0
+          } : null
+        }
+      };
     } catch (error) {
       console.error('Error checking class teacher status:', error);
       return { data: { isClassTeacher: false } };

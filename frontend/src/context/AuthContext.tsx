@@ -73,20 +73,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Check if teacher is a class teacher
   const checkClassTeacherStatus = async (userData: User) => {
+    console.log('🔍 AuthContext: Checking class teacher status for', userData.email, 'role:', userData.role);
+
     if (userData.role === 'TEACHER') {
       try {
+        console.log('📡 AuthContext: Calling getClassTeacherStatus API...');
         const response = await dashboardService.getClassTeacherStatus();
+        console.log('📡 AuthContext: API response:', response);
+
         const status = response?.data;
-        setIsClassTeacher(status?.isClassTeacher || false);
+        console.log('📡 AuthContext: status data:', status);
+
+        const hasClass = status?.isClassTeacher || false;
+        console.log('✅ AuthContext: isClassTeacher =', hasClass);
+
+        setIsClassTeacher(hasClass);
         setClassTeacherClass(status?.class || null);
       } catch (error) {
-        console.error('Error checking class teacher status:', error);
+        console.error('❌ AuthContext: Error checking class teacher status:', error);
         setIsClassTeacher(false);
         setClassTeacherClass(null);
       }
     } else if (userData.role === 'CLASS_TEACHER') {
+      console.log('✅ AuthContext: User has CLASS_TEACHER role');
       setIsClassTeacher(true);
     } else {
+      console.log('ℹ️ AuthContext: User role is', userData.role, '- not a teacher');
       setIsClassTeacher(false);
       setClassTeacherClass(null);
     }
@@ -94,17 +106,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const initAuth = async () => {
+      console.log('🚀 AuthContext: Initializing auth...');
       const token = localStorage.getItem("token");
       if (token) {
         try {
           const userData = await authService.getMe();
           const formattedUser = formatUserData(userData);
+          console.log('✅ AuthContext: User loaded:', formattedUser.email, 'role:', formattedUser.role);
           setUser(formattedUser);
           await checkClassTeacherStatus(formattedUser);
         } catch (error) {
-          console.error("Auth init error:", error);
+          console.error("❌ AuthContext: Init error:", error);
           localStorage.removeItem("token");
         }
+      } else {
+        console.log('ℹ️ AuthContext: No token found');
       }
       setIsLoading(false);
     };
@@ -114,9 +130,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = async (credentials: LoginCredentials) => {
     try {
+      console.log('🔐 AuthContext: Logging in...');
       const response = await authService.login(credentials);
 
       if (response.token && response.user) {
+        console.log('✅ AuthContext: Login successful for', response.user.email);
         localStorage.setItem("token", response.token);
 
         const formattedUser = formatUserData(response.user);
