@@ -1,7 +1,7 @@
 ﻿import { Fragment, useMemo } from "react";
 import { Dialog, Transition } from "@headlessui/react";
 import { XMarkIcon } from "@heroicons/react/24/outline";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
     HomeIcon,
@@ -26,8 +26,11 @@ interface SidebarProps {
 
 export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     const { user } = useAuth();
+    const location = useLocation();
+    const isClassTeacherRoute = location.pathname.startsWith('/class-teacher');
 
     // Build navigation items dynamically based on user role
+    const hasClassTeacherAccess = user?.role === "CLASS_TEACHER" || isClassTeacherRoute;
     const navigationItems = useMemo(() => {
         const items = [];
 
@@ -35,7 +38,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
         items.push({ name: "Dashboard", href: "/dashboard", icon: HomeIcon });
 
         // Students - different for Class Teachers vs others
-        if (user?.role === "CLASS_TEACHER") {
+        if (hasClassTeacherAccess) {
             items.push({ name: "My Students", href: "/class-teacher/students", icon: UsersIcon });
         } else if (user?.role === "TEACHER" || user?.role === "ADMIN" || user?.role === "PRINCIPAL") {
             items.push({ name: "Students", href: "/students", icon: UsersIcon });
@@ -57,12 +60,12 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
         }
 
         // Subjects - Admin, Principal, Teacher, Class Teacher
-        if (user?.role === "ADMIN" || user?.role === "PRINCIPAL" || user?.role === "TEACHER" || user?.role === "CLASS_TEACHER") {
+        if (user?.role === "ADMIN" || user?.role === "PRINCIPAL" || user?.role === "TEACHER" || hasClassTeacherAccess) {
             items.push({ name: "Subjects", href: "/subjects", icon: BookOpenIcon });
         }
 
         // Results - Admin, Principal, Teacher, Class Teacher
-        if (user?.role === "ADMIN" || user?.role === "PRINCIPAL" || user?.role === "TEACHER" || user?.role === "CLASS_TEACHER") {
+        if (user?.role === "ADMIN" || user?.role === "PRINCIPAL" || user?.role === "TEACHER" || hasClassTeacherAccess) {
             items.push({ name: "Enter Results", href: "/teacher-results", icon: ChartBarIcon });
         }
 
@@ -82,7 +85,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
         }
 
         // CLASS TEACHER SPECIFIC FEATURES
-        if (user?.role === "CLASS_TEACHER") {
+        if (hasClassTeacherAccess) {
             items.push({ name: "Take Attendance", href: "/class-teacher/attendance", icon: CheckCircleIcon });
             items.push({ name: "Attendance History", href: "/attendance-history", icon: ClockIcon });
             items.push({ name: "Add Comments", href: "/class-teacher/comments", icon: ChatBubbleLeftRightIcon });
