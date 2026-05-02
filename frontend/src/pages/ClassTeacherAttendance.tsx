@@ -15,7 +15,9 @@ export const ClassTeacherAttendance = () => {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['class-teacher-attendance', selectedDate],
     queryFn: async () => {
+      console.log('📡 Fetching attendance for date:', selectedDate);
       const response = await api.get(`/class-teacher/attendance?date=${selectedDate}`);
+      console.log('📡 Attendance response:', response.data);
       return response.data.data;
     },
   });
@@ -26,11 +28,17 @@ export const ClassTeacherAttendance = () => {
         studentId,
         status,
       }));
-      const response = await api.post('/class-teacher/attendance/bulk', {
+
+      const payload = {
         date: selectedDate,
         attendances: attendanceList,
         classId: data?.classId,
-      });
+      };
+
+      console.log('📡 Saving attendance with payload:', payload);
+
+      const response = await api.post('/class-teacher/attendance/bulk', payload);
+      console.log('📡 Save response:', response.data);
       return response.data;
     },
     onSuccess: () => {
@@ -38,7 +46,9 @@ export const ClassTeacherAttendance = () => {
       toast.success('Attendance saved successfully!');
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Failed to save attendance');
+      console.error('❌ Save attendance error:', error);
+      console.error('❌ Error response:', error.response?.data);
+      toast.error(error.response?.data?.error || error.response?.data?.message || 'Failed to save attendance');
     },
   });
 
@@ -49,6 +59,8 @@ export const ClassTeacherAttendance = () => {
         initialAttendances[student.studentId] = student.status || 'PRESENT';
       });
       setAttendances(initialAttendances);
+      console.log('✅ Loaded attendances:', initialAttendances);
+      console.log('✅ Class ID:', data?.classId);
     }
   }, [data]);
 
@@ -70,6 +82,7 @@ export const ClassTeacherAttendance = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Take Attendance</h1>
           <p className="text-gray-600 dark:text-gray-400">Class: {data?.className || 'Loading...'}</p>
+          <p className="text-xs text-gray-500">Class ID: {data?.classId || 'N/A'}</p>
         </div>
         <div className="flex gap-3">
           <input
@@ -154,3 +167,5 @@ export const ClassTeacherAttendance = () => {
     </div>
   );
 };
+
+export default ClassTeacherAttendance;

@@ -735,70 +735,6 @@ app.get('/api/teachers/user/:userId', async (req, res) => {
   }
 });
 
-// Check if current teacher is a class teacher (lightweight)
-app.get('/api/teachers/me/class-teacher-status', async (req, res) => {
-  try {
-    const authHeader = req.headers.authorization;
-    let userId = null;
-
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.split(' ')[1];
-      const decoded = Buffer.from(token, 'base64').toString();
-      userId = decoded.split(':')[0];
-    }
-
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    const teacher = await prisma.teacher.findFirst({
-      where: { userId },
-      include: {
-        user: {
-          select: { id: true, name: true, email: true, role: true }
-        },
-        classTaught: {
-          select: {
-            id: true,
-            name: true,
-            grade: true,
-            _count: {
-              select: { students: true, subjects: true }
-            }
-          }
-        }
-      }
-    });
-
-    if (!teacher) {
-      return res.status(404).json({ error: 'Teacher not found' });
-    }
-
-    res.json({
-      success: true,
-      data: {
-        isClassTeacher: !!teacher.classTaught,
-        teacherId: teacher.id,
-        userId: teacher.userId,
-        name: teacher.user?.name,
-        role: teacher.user?.role,
-        class: teacher.classTaught ? {
-          id: teacher.classTaught.id,
-          name: teacher.classTaught.name,
-          grade: teacher.classTaught.grade,
-          studentCount: teacher.classTaught._count.students,
-          subjectCount: teacher.classTaught._count.subjects
-        } : null
-      }
-    });
-
-  } catch (error) {
-    console.error('Error checking class teacher status:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 5. Create teacher
 // 5. Create teacher
 app.post('/api/teachers', async (req, res) => {
   try {
@@ -6076,18 +6012,40 @@ app.post('/api/class-teacher/attendance/bulk', async (req, res) => {
     }
 
     const { date, attendances, classId } = req.body;
+    console.log('📝 Saving attendance:', { date, classId, count: attendances?.length });
 
-    // Verify teacher has access to this class
+    // Get teacher and verify they have a homeroom class
     const teacher = await prisma.teacher.findFirst({
-      where: { userId, classTaughtId: classId }
+      where: { userId },
+      include: { classTaught: true }
     });
 
     if (!teacher) {
-      return res.status(403).json({ error: 'You are not the class teacher for this class' });
+      console.log('❌ Teacher not found for userId:', userId);
+      return res.status(404).json({ error: 'Teacher not found' });
+    }
+
+    if (!teacher.classTaught) {
+      console.log('❌ Teacher has no homeroom class');
+      return res.status(403).json({ error: 'You are not assigned as a class teacher' });
+    }
+
+    // Use the teacher's assigned class if no classId provided, or verify the provided one matches
+    const effectiveClassId = classId || teacher.classTaught.id;
+
+    if (classId && classId !== teacher.classTaught.id) {
+      console.log('❌ Class mismatch. Provided:', classId, 'Teacher class:', teacher.classTaught.id);
+      return res.status(403).json({ 
+        error: 'You are not the class teacher for this class',
+        yourClass: teacher.classTaught.id,
+        requestedClass: classId
+      });
     }
 
     const targetDate = new Date(date);
     targetDate.setHours(0, 0, 0, 0);
+
+    console.log('💾 Upserting', attendances.length, 'attendance records for date:', targetDate, 'class:', effectiveClassId);
 
     // Use transaction for bulk upsert
     const results = await prisma.$transaction(
@@ -6099,16 +6057,18 @@ app.post('/api/class-teacher/attendance/bulk', async (req, res) => {
               date: targetDate
             }
           },
-          update: { status: att.status },
+          update: { status: att.status, classId: effectiveClassId },
           create: {
             date: targetDate,
             status: att.status,
             studentId: att.studentId,
-            classId: classId
+            classId: effectiveClassId
           }
         })
       )
     );
+
+    console.log('✅ Attendance saved for', results.length, 'students');
 
     res.json({
       success: true,
@@ -6116,7 +6076,7 @@ app.post('/api/class-teacher/attendance/bulk', async (req, res) => {
       data: results
     });
   } catch (error) {
-    console.error('Error saving attendance:', error);
+    console.error('❌ Error saving attendance:', error);
     res.status(500).json({ error: error.message });
   }
 });
