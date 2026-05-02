@@ -4867,7 +4867,7 @@ app.get('/api/dashboard/bursar', async (req, res) => {
   }
 });
 
-// Teacher Dashboard - Filtered by teacher's assigned classes and subjects (FIXED VERSION)
+// Teacher Dashboard - FIXED VERSION
 app.get('/api/dashboard/teacher', async (req, res) => {
   try {
     console.log('🔍 Fetching teacher dashboard...');
@@ -4877,13 +4877,9 @@ app.get('/api/dashboard/teacher', async (req, res) => {
     
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.split(' ')[1];
-      try {
-        const decoded = Buffer.from(token, 'base64').toString();
-        userId = decoded.split(':')[0];
-        console.log('👤 User ID from token:', userId);
-      } catch (e) {
-        console.log('Token decode error, using first teacher');
-      }
+      const decoded = Buffer.from(token, 'base64').toString();
+      userId = decoded.split(':')[0];
+      console.log('👤 User ID from token:', userId);
     }
     
     let teacher;
@@ -4928,13 +4924,8 @@ app.get('/api/dashboard/teacher', async (req, res) => {
       console.log('⚠️ No teacher profile found');
       return res.json({
         data: {
-          teacher: { name: "No Teacher Found", subjects: [] },
-          stats: {
-            totalStudents: 0,
-            totalClasses: 0,
-            totalSubjects: 0,
-            todayAttendance: 0
-          },
+          teacher: { name: "No Teacher Found", subjects: [], classes: [] },
+          stats: { totalStudents: 0, totalClasses: 0, totalSubjects: 0, todayAttendance: 0 },
           recentGrades: [],
           students: []
         }
@@ -4942,97 +4933,83 @@ app.get('/api/dashboard/teacher', async (req, res) => {
     }
 
     console.log('👨‍🏫 Teacher found:', teacher.user?.name);
-    console.log('📚 Teacher assigned classes:', teacher.classes.map(c => ({ id: c.id, name: c.name })));
-    
-    // Get the IDs of classes this teacher is assigned to
-    const teacherClassIds = new Set(teacher.classes.map(c => c.id));
-    const teacherClassNames = new Set(teacher.classes.map(c => c.name));
-    
-    console.log('📋 Teacher class IDs:', Array.from(teacherClassIds));
-    console.log('📋 Teacher class names:', Array.from(teacherClassNames));
-    
-    // Filter subjects to ONLY show classes the teacher is assigned to
-    const formattedSubjects = [];
-    
-    teacher.subjects.forEach(subject => {
-      console.log(`\n📖 Processing subject: ${subject.name}`);
-      console.log(`   Subject classes:`, subject.classes.map(sc => ({ 
-        classId: sc.classId, 
-        className: sc.class?.name 
-      })));
-      
-      // Check each class this subject is associated with
-      if (subject.classes && subject.classes.length > 0) {
-        subject.classes.forEach(subjectClass => {
-          const className = subjectClass.class?.name;
-          const classId = subjectClass.classId;
-          
-          // ONLY include this subject-class pair if the teacher is assigned to this class
-          if (className && teacherClassNames.has(className)) {
-            console.log(`   ✅ Including: ${subject.name} -> ${className} (teacher assigned)`);
-            formattedSubjects.push({
-              id: subject.id,
-              name: subject.name,
-              className: className,
-              classId: classId
-            });
-          } else {
-            console.log(`   ❌ Excluding: ${subject.name} -> ${className} (teacher not assigned to this class)`);
-          }
-        });
-      } else {
-        // If no class associations, only add if it's a default subject for teacher's classes
-        console.log(`   ⚠️ Subject ${subject.name} has no class associations`);
-      }
-    });
-    
-    console.log('\n📖 Final formatted subjects (only teacher\'s classes):', formattedSubjects.map(s => `${s.name} -> ${s.className}`));
-    
+    console.log('📚 Teacher subjects count:', teacher.subjects?.length);
+    console.log('📚 Teacher classes count:', teacher.classes?.length);
+
+    // Get teacher's assigned classes
     const teacherClasses = teacher.classes || [];
     const classIds = teacherClasses.map(c => c.id);
     
+    // Get students from those classes
     let students = [];
     if (classIds.length > 0) {
       students = await prisma.student.findMany({
-        where: {
-          classId: { in: classIds }
+        where: { classId: { in: classIds } },
+        include: { 
+          user: true, 
+          class: true 
         },
-        include: {
-          user: true,
-          class: true
-        },
-        orderBy: {
-          user: {
-            name: 'asc'
-          }
-        }
+        orderBy: { user: { name: 'asc' } }
       });
-      console.log(`👨‍🎓 Found ${students.length} students from teacher's ${teacherClasses.length} classes`);
+      console.log(`👨‍🎓 Found ${students.length} students from ${teacherClasses.length} classes`);
     } else {
       console.log('⚠️ Teacher has no assigned classes');
     }
     
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    let todayAttendance = 0;
+    // FORMAT SUBJECTS WITH THEIR CLASSES - FIXED
+    const formattedSubjects = [];
+    const subjectMap = new Map(); // To avoid duplicates
     
-    if (classIds.length > 0) {
-      todayAttendance = await prisma.attendance.count({
-        where: {
-          classId: { in: classIds },
-          date: {
-            gte: today,
-            lt: new Date(today.getTime() + 24 * 60 * 60 * 1000)
+    for (const subject of teacher.subjects) {
+      // Get the class info for this subject
+      if (subject.classes && subject.classes.length > 0) {
+        for (const subjectClass of subject.classes) {
+          const className = subjectClass.class?.name;
+          const classId = subjectClass.classId;
+          
+          if (className) {
+            const key = `${subject.id}-${classId}`;
+            if (!subjectMap.has(key)) {
+              subjectMap.set(key, true);
+              formattedSubjects.push({
+                id: subject.id,
+                name: subject.name,
+                className: className,
+                classId: classId,
+                subjectCode: subject.code || subject.name.substring(0, 3).toUpperCase()
+              });
+            }
           }
         }
-      });
+      } else {
+        // If subject has no class association, add it without class
+        formattedSubjects.push({
+          id: subject.id,
+          name: subject.name,
+          className: null,
+          classId: null,
+          subjectCode: subject.code || subject.name.substring(0, 3).toUpperCase()
+        });
+      }
     }
     
-    const studentIds = students.map(s => s.id);
-    let recentGrades = [];
+    console.log('📖 Formatted subjects:', formattedSubjects.map(s => `${s.name} -> ${s.className || 'No Class'}`));
     
-    if (teacher.subjects.length > 0 && studentIds.length > 0) {
+    // Get today's attendance count
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayAttendance = await prisma.attendance.count({
+      where: {
+        classId: { in: classIds.length > 0 ? classIds : [] },
+        date: { gte: today, lt: new Date(today.getTime() + 24 * 60 * 60 * 1000) }
+      }
+    });
+    
+    // Get recent grades
+    let recentGrades = [];
+    if (teacher.subjects.length > 0 && students.length > 0) {
       const subjectIds = teacher.subjects.map(s => s.id);
+      const studentIds = students.map(s => s.id);
       
       recentGrades = await prisma.grade.findMany({
         take: 20,
@@ -5044,26 +5021,25 @@ app.get('/api/dashboard/teacher', async (req, res) => {
           ]
         },
         include: {
-          student: {
-            include: {
-              user: true
-            }
-          },
+          student: { include: { user: true } },
           subject: true
         }
       });
-      console.log(`📊 Found ${recentGrades.length} recent grades for teacher's subjects`);
+      console.log(`📊 Found ${recentGrades.length} recent grades`);
     }
     
+    // Format students for response
     const formattedStudents = students.map(student => ({
       id: student.id,
       name: student.user?.name || 'Unknown',
       firstName: student.user?.name?.split(' ')[0] || '',
       lastName: student.user?.name?.split(' ').slice(1).join(' ') || '',
       admissionNo: student.admissionNo || 'N/A',
-      className: student.class?.name || 'No Class'
+      className: student.class?.name || 'No Class',
+      classId: student.classId
     }));
     
+    // Format grades for response
     const formattedGrades = recentGrades.map(grade => ({
       id: grade.id,
       studentName: grade.student?.user?.name || 'Unknown',
@@ -5073,7 +5049,8 @@ app.get('/api/dashboard/teacher', async (req, res) => {
       createdAt: grade.createdAt
     }));
     
-    const formattedClasses = teacher.classes.map(cls => ({
+    // Format classes for response
+    const formattedClasses = teacherClasses.map(cls => ({
       id: cls.id,
       name: cls.name
     }));
@@ -5097,13 +5074,12 @@ app.get('/api/dashboard/teacher', async (req, res) => {
       }
     };
     
-    console.log('\n✅ Dashboard data prepared:', {
+    console.log('✅ Dashboard data prepared:', {
       teacherName: responseData.data.teacher.name,
       studentsCount: responseData.data.stats.totalStudents,
       classesCount: responseData.data.stats.totalClasses,
       subjectsCount: responseData.data.stats.totalSubjects,
-      formattedSubjects: responseData.data.teacher.subjects.map(s => `${s.name} (${s.className})`),
-      gradesCount: responseData.data.recentGrades.length
+      subjects: responseData.data.teacher.subjects.map(s => `${s.name} (${s.className || 'No Class'})`)
     });
     
     res.json(responseData);
