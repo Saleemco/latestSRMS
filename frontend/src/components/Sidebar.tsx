@@ -93,7 +93,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
             items.push({ name: "Take Attendance", href: "/class-teacher/attendance", icon: CheckCircleIcon });
             items.push({ name: "Attendance History", href: "/attendance-history", icon: ClockIcon });
             items.push({ name: "Add Comments", href: "/class-teacher/comments", icon: ChatBubbleLeftRightIcon });
-            items.push({ name: "Student Performance", href: "/class-teacher/performance", icon: ChartBarIcon });
+            // REMOVED: Student Performance link
         }
 
         // Sessions - only Admin/Principal

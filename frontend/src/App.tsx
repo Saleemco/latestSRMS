@@ -27,7 +27,6 @@ import Parents from "./pages/Parents";
 import { ClassTeacherAttendance } from "./pages/ClassTeacherAttendance";
 import { AttendanceHistory } from "./pages/AttendanceHistory";
 import { ClassTeacherComments } from "./pages/ClassTeacherComments";
-import { ClassTeacherPerformance } from "./pages/ClassTeacherPerformance";
 
 const queryClient = new QueryClient();
 
@@ -75,15 +74,10 @@ function App() {
                     </ProtectedRoute>
                   } />
                   
+                  {/* RESTORED: Comments route uses ClassTeacherComments component */}
                   <Route path="class-teacher/comments" element={
                     <ProtectedRoute allowedRoles={['TEACHER', 'CLASS_TEACHER', 'ADMIN', 'PRINCIPAL']} requireClassTeacher={true}>
                       <ClassTeacherComments />
-                    </ProtectedRoute>
-                  } />
-                  
-                  <Route path="class-teacher/performance" element={
-                    <ProtectedRoute allowedRoles={['TEACHER', 'CLASS_TEACHER', 'ADMIN', 'PRINCIPAL']} requireClassTeacher={true}>
-                      <ClassTeacherPerformance />
                     </ProtectedRoute>
                   } />
                   
