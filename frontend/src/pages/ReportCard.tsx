@@ -8,7 +8,7 @@ import { SearchBar } from "../components/ui/SearchBar";
 import { Spinner } from "../components/ui/Spinner";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
-import { api } from "../services/api";
+import api from "../services/api";
 import {
   ChartBarIcon,
   AcademicCapIcon,
